@@ -1,0 +1,64 @@
+name: Sync Canvas Materials
+
+on:
+  schedule:
+    - cron: "0 2 * * *"  # runs daily at 2am UTC
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v3
+
+      - name: Fetch files for CS 202
+        env:
+          CANVAS_TOKEN: ${{ secrets.CANVAS_API_TOKEN }}
+          CANVAS_DOMAIN: ${{ secrets.CANVAS_DOMAIN }}
+        run: |
+          mkdir -p CS202
+          curl -s -H "Authorization: Bearer $CANVAS_TOKEN" \
+            "https://${CANVAS_DOMAIN}/api/v1/folders/FOLDER_ID_CS202/files" > cs202_list.json
+          jq -r '.[].url' cs202_list.json | while read url; do
+            fname=$(basename "$url")
+            curl -s -H "Authorization: Bearer $CANVAS_TOKEN" "$url" \
+              -o "CS202/$fname"
+          done
+
+      - name: Fetch files for CS 226
+        env:
+          CANVAS_TOKEN: ${{ secrets.CANVAS_API_TOKEN }}
+          CANVAS_DOMAIN: ${{ secrets.CANVAS_DOMAIN }}
+        run: |
+          mkdir -p CS226
+          curl -s -H "Authorization: Bearer $CANVAS_TOKEN" \
+            "https://${CANVAS_DOMAIN}/api/v1/folders/FOLDER_ID_CS226/files" > cs226_list.json
+          jq -r '.[].url' cs226_list.json | while read url; do
+            fname=$(basename "$url")
+            curl -s -H "Authorization: Bearer $CANVAS_TOKEN" "$url" \
+              -o "CS226/$fname"
+          done
+
+      - name: Fetch files for CS 228
+        env:
+          CANVAS_TOKEN: ${{ secrets.CANVAS_API_TOKEN }}
+          CANVAS_DOMAIN: ${{ secrets.CANVAS_DOMAIN }}
+        run: |
+          mkdir -p CS228
+          curl -s -H "Authorization: Bearer $CANVAS_TOKEN" \
+            "https://${CANVAS_DOMAIN}/api/v1/folders/FOLDER_ID_CS228/files" > cs228_list.json
+          jq -r '.[].url' cs228_list.json | while read url; do
+            fname=$(basename "$url")
+            curl -s -H "Authorization: Bearer $CANVAS_TOKEN" "$url" \
+              -o "CS228/$fname"
+          done
+
+      - name: Commit & push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add CS202 CS226 CS228
+          git commit -m "Sync Canvas materials $(date -u)" || echo "No changes"
+          git push
