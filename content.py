@@ -268,23 +268,47 @@ def main():
                 content = f"<h1>{module['name']}</h1><ul>"
                 items = safe_paginate(f"{BASE_API_URL}/courses/{course_id}/modules/{module['id']}/items?per_page=100")
                 for item in items:
-                    content += f"<li>{item['title']} ({item['type']})</li>"
-
-                    if item['type'] == 'File' and 'content_id' in item:
-                        download_canvas_file_by_id(item['content_id'], course_folder)
-
-                    elif 'html_url' in item:
+                    item_title = item.get('title', 'Untitled')
+                    item_type = item.get('type', 'Unknown')
+                    
+                    # Build list item with link if available
+                    if 'html_url' in item:
                         html_url = item['html_url']
+                        content += f"<li><a href='{html_url}'>{item_title}</a> ({item_type})</li>"
+                        
+                        # Download linked files from the item
                         item_resp = requests.get(html_url, headers=HEADERS)
                         if item_resp.ok:
                             extract_and_download_linked_files(item_resp.text, course_folder)
-
                     elif item.get('type') == 'Page' and 'page_url' in item:
-                        page_api_url = f"{BASE_API_URL}/courses/{course_id}/pages/{item['page_url']}"
+                        page_url = item['page_url']
+                        page_api_url = f"{BASE_API_URL}/courses/{course_id}/pages/{page_url}"
+                        # Create a link to the page
+                        page_html_url = f"{CANVAS_DOMAIN}/courses/{course_id}/pages/{page_url}"
+                        content += f"<li><a href='{page_html_url}'>{item_title}</a> ({item_type})</li>"
+                        
                         page_resp = requests.get(page_api_url, headers=HEADERS)
                         if page_resp.ok:
                             body = page_resp.json().get('body', '')
                             extract_and_download_linked_files(body, course_folder)
+                    elif item['type'] == 'File' and 'content_id' in item:
+                        # For files, try to get the file URL
+                        try:
+                            file_meta = requests.get(f"{BASE_API_URL}/files/{item['content_id']}", headers=HEADERS)
+                            if file_meta.ok:
+                                file_data = file_meta.json()
+                                file_url = file_data.get('url', '')
+                                if file_url:
+                                    content += f"<li><a href='{file_url}'>{item_title}</a> ({item_type})</li>"
+                                else:
+                                    content += f"<li>{item_title} ({item_type})</li>"
+                        except:
+                            content += f"<li>{item_title} ({item_type})</li>"
+                        
+                        download_canvas_file_by_id(item['content_id'], course_folder)
+                    else:
+                        # No link available, just show title and type
+                        content += f"<li>{item_title} ({item_type})</li>"
 
                 content += "</ul>"
                 name = f"module - {module['name']}"
