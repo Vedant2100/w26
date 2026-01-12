@@ -25,6 +25,8 @@ Setup and Usage:
    - Set CANVAS_API_TOKEN environment variable with your API token.
    - Set CANVAS_DOMAIN environment variable with your Canvas domain 
      (e.g., 'https://canvas.pitt.edu').
+   - Optional: Set AUTO_COMMIT=true to automatically commit downloaded files.
+   - Optional: Set AUTO_PUSH=true to automatically push commits to remote.
    - For GitHub Actions, add these as secrets in your repository settings.
 
 4. Run the Script:
@@ -35,8 +37,9 @@ Setup and Usage:
    - Save everything to a structured local folder organized by course
 
 Output:
-All downloaded files are saved to a local directory named `canvas_all_content`, 
-with one subfolder per course. Original filenames and extensions are preserved.
+All downloaded files are saved to a directory named `canvas_all_content` in the 
+current GitHub repository, with one subfolder per course. Original filenames and 
+extensions are preserved.
 
 Folder Structure:
 canvas_all_content/
@@ -63,10 +66,13 @@ import os
 import re
 import platform
 import shutil
+import subprocess
 import requests
 import pdfkit
+from pathlib import Path
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
+from datetime import datetime
 
 
 # Configuration for wkhtmltopdf (platform-agnostic)
@@ -115,8 +121,27 @@ if not CANVAS_DOMAIN:
     )
 
 BASE_API_URL = f'{CANVAS_DOMAIN}/api/v1'
-DOWNLOADS_BASE = os.path.join(os.path.expanduser("~"), "Downloads", "canvas_all_content")
 HEADERS = {'Authorization': f'Bearer {CANVAS_API_TOKEN}'}
+
+
+def get_repo_root():
+    """Find the root of the current git repository."""
+    current_dir = Path(__file__).resolve().parent
+    while current_dir != current_dir.parent:
+        if (current_dir / '.git').exists():
+            return current_dir
+        current_dir = current_dir.parent
+    # If not in a git repo, use the script's directory
+    return Path(__file__).resolve().parent
+
+
+# Store files in the current GitHub repository
+REPO_ROOT = get_repo_root()
+DOWNLOADS_BASE = REPO_ROOT / "canvas_all_content"
+
+# Git configuration (optional - set AUTO_COMMIT=true to enable)
+AUTO_COMMIT = os.getenv('AUTO_COMMIT', 'false').lower() == 'true'
+AUTO_PUSH = os.getenv('AUTO_PUSH', 'false').lower() == 'true'
 
 downloaded_file_urls = set()
 
@@ -147,9 +172,9 @@ def safe_paginate(url):
 def save_html_as_pdf(folder, name, html_content):
     """Convert HTML content to PDF and save it."""
     safe_name = make_safe(name)
-    pdf_path = os.path.join(folder, f"{safe_name}.pdf")
+    pdf_path = Path(folder) / f"{safe_name}.pdf"
     try:
-        pdfkit.from_string(html_content, pdf_path, configuration=pdfkit_config)
+        pdfkit.from_string(html_content, str(pdf_path), configuration=pdfkit_config)
         print(f"    Saved PDF: {safe_name}.pdf")
     except Exception as e:
         print(f"    Error converting {safe_name} to PDF: {e}")
@@ -169,7 +194,7 @@ def download_canvas_file_by_id(file_id, course_folder):
 
         r = requests.get(download_url, headers=HEADERS)
         r.raise_for_status()
-        with open(os.path.join(course_folder, filename), 'wb') as f:
+        with open(course_folder / filename, 'wb') as f:
             f.write(r.content)
 
         downloaded_file_urls.add(download_url)
@@ -199,6 +224,9 @@ def extract_and_download_linked_files(html, course_folder):
 
 def main():
     """Main workflow to download all course content."""
+    # Ensure the base downloads directory exists
+    DOWNLOADS_BASE.mkdir(parents=True, exist_ok=True)
+    
     print("Fetching your Canvas courses...")
 
     current_courses = safe_paginate(f"{BASE_API_URL}/courses?per_page=100&enrollment_state=active")
@@ -210,8 +238,8 @@ def main():
         course_id = course['id']
         course_name = make_safe(course.get('name') or f"course_{course_id}")
         print(f"\nCourse: {course_name}")
-        course_folder = os.path.join(DOWNLOADS_BASE, course_name)
-        os.makedirs(course_folder, exist_ok=True)
+        course_folder = DOWNLOADS_BASE / course_name
+        course_folder.mkdir(parents=True, exist_ok=True)
 
         print("  Downloading files...")
         for file in safe_paginate(f"{BASE_API_URL}/courses/{course_id}/files?per_page=100"):
@@ -221,7 +249,7 @@ def main():
                     continue
                 r = requests.get(file_url, headers=HEADERS)
                 r.raise_for_status()
-                file_path = os.path.join(course_folder, make_safe(file['filename']))
+                file_path = course_folder / make_safe(file['filename'])
                 with open(file_path, 'wb') as f:
                     f.write(r.content)
                 downloaded_file_urls.add(file_url)
@@ -295,14 +323,80 @@ def main():
                     filename = make_safe(f"submission - {attachment['filename']}")
                     r = requests.get(file_url, headers=HEADERS)
                     r.raise_for_status()
-                    with open(os.path.join(course_folder, filename), 'wb') as f:
+                    with open(course_folder / filename, 'wb') as f:
                         f.write(r.content)
                     downloaded_file_urls.add(file_url)
                     print(f"    ✅ Downloaded submission: {filename}")
                 except Exception as e:
                     print(f"    Error downloading submission file: {e}")
 
-    print("\n✅ All course content downloaded to your Downloads/canvas_all_content folder.")
+    print(f"\n✅ All course content downloaded to {DOWNLOADS_BASE}")
+    
+    # Auto-commit and push if enabled
+    if AUTO_COMMIT:
+        commit_and_push()
+
+
+def commit_and_push():
+    """Commit and optionally push downloaded files to git."""
+    try:
+        # Check if we're in a git repository
+        result = subprocess.run(
+            ['git', 'rev-parse', '--git-dir'],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            print("⚠️  Not in a git repository. Skipping commit.")
+            return
+        
+        # Check if there are any changes
+        result = subprocess.run(
+            ['git', 'status', '--porcelain'],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True
+        )
+        if not result.stdout.strip():
+            print("ℹ️  No changes to commit.")
+            return
+        
+        # Add all files in canvas_all_content
+        print("\n📝 Committing downloaded files...")
+        subprocess.run(
+            ['git', 'add', str(DOWNLOADS_BASE)],
+            cwd=REPO_ROOT,
+            check=True
+        )
+        
+        # Create commit message with timestamp
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        commit_message = f"Update Canvas course content - {timestamp}"
+        
+        subprocess.run(
+            ['git', 'commit', '-m', commit_message],
+            cwd=REPO_ROOT,
+            check=True
+        )
+        print(f"✅ Committed changes: {commit_message}")
+        
+        # Push if enabled
+        if AUTO_PUSH:
+            print("🚀 Pushing to remote repository...")
+            subprocess.run(
+                ['git', 'push'],
+                cwd=REPO_ROOT,
+                check=True
+            )
+            print("✅ Pushed to remote repository")
+        else:
+            print("ℹ️  Changes committed locally. Set AUTO_PUSH=true to push automatically.")
+            
+    except subprocess.CalledProcessError as e:
+        print(f"⚠️  Error during git operation: {e}")
+    except FileNotFoundError:
+        print("⚠️  Git is not installed. Skipping commit.")
 
 
 if __name__ == "__main__":
