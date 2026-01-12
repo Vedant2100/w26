@@ -115,8 +115,15 @@ if not CANVAS_DOMAIN:
     )
 
 BASE_API_URL = f'{CANVAS_DOMAIN}/api/v1'
-DOWNLOADS_BASE = os.path.join(os.path.expanduser("~"), "Downloads", "canvas_all_content")
 HEADERS = {'Authorization': f'Bearer {CANVAS_API_TOKEN}'}
+
+# Determine where to save files - use repo directory if in GitHub Actions, otherwise Downloads
+if os.getenv('GITHUB_WORKSPACE'):
+    # Running in GitHub Actions - save to repo
+    DOWNLOADS_BASE = os.path.join(os.getenv('GITHUB_WORKSPACE'), 'canvas_all_content')
+else:
+    # Running locally - save to Downloads
+    DOWNLOADS_BASE = os.path.join(os.path.expanduser("~"), "Downloads", "canvas_all_content")
 
 downloaded_file_urls = set()
 
@@ -199,6 +206,9 @@ def extract_and_download_linked_files(html, course_folder):
 
 def main():
     """Main workflow to download all course content."""
+    # Ensure the downloads directory exists
+    os.makedirs(DOWNLOADS_BASE, exist_ok=True)
+    
     print("Fetching your Canvas courses...")
 
     # Only fetch currently enrolled (active) courses
@@ -300,7 +310,64 @@ def main():
                 except Exception as e:
                     print(f"    Error downloading submission file: {e}")
 
-    print("\n✅ All course content downloaded to your Downloads/canvas_all_content folder.")
+    print(f"\n✅ All course content downloaded to {DOWNLOADS_BASE}")
+    
+    # If running in GitHub Actions, commit and push
+    if os.getenv('GITHUB_WORKSPACE'):
+        commit_and_push()
+
+
+def commit_and_push():
+    """Commit and push downloaded files to git (GitHub Actions only)."""
+    import subprocess
+    from datetime import datetime
+    
+    try:
+        repo_dir = os.getenv('GITHUB_WORKSPACE')
+        
+        # Check if there are any changes
+        result = subprocess.run(
+            ['git', 'status', '--porcelain'],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True
+        )
+        if not result.stdout.strip():
+            print("ℹ️  No changes to commit.")
+            return
+        
+        # Add all files in canvas_all_content
+        print("\n📝 Committing downloaded files...")
+        subprocess.run(
+            ['git', 'add', 'canvas_all_content/'],
+            cwd=repo_dir,
+            check=True
+        )
+        
+        # Create commit message with timestamp
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        commit_message = f"Update Canvas course content - {timestamp}"
+        
+        subprocess.run(
+            ['git', 'commit', '-m', commit_message],
+            cwd=repo_dir,
+            check=True
+        )
+        print(f"✅ Committed changes: {commit_message}")
+        
+        # Push to remote
+        print("🚀 Pushing to remote repository...")
+        subprocess.run(
+            ['git', 'push'],
+            cwd=repo_dir,
+            check=True
+        )
+        print("✅ Pushed to remote repository")
+            
+    except subprocess.CalledProcessError as e:
+        print(f"⚠️  Error during git operation: {e}")
+    except Exception as e:
+        print(f"⚠️  Error: {e}")
 
 
 if __name__ == "__main__":
