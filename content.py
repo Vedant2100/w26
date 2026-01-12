@@ -162,6 +162,18 @@ def save_html_as_pdf(folder, name, html_content):
         print(f"    Error converting {safe_name} to PDF: {e}")
 
 
+def save_markdown(folder, name, markdown_content):
+    """Save markdown content to a .md file."""
+    safe_name = make_safe(name)
+    md_path = os.path.join(folder, f"{safe_name}.md")
+    try:
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write(markdown_content)
+        print(f"    Saved Markdown: {safe_name}.md")
+    except Exception as e:
+        print(f"    Error saving {safe_name}.md: {e}")
+
+
 def download_canvas_file_by_id(file_id, course_folder):
     """Download a Canvas file by its file ID."""
     try:
@@ -265,16 +277,18 @@ def main():
         print("  Downloading modules...")
         for module in safe_paginate(f"{BASE_API_URL}/courses/{course_id}/modules?per_page=100"):
             try:
-                content = f"<h1>{module['name']}</h1><ul>"
+                # Start markdown content
+                md_content = f"# {module['name']}\n\n"
                 items = safe_paginate(f"{BASE_API_URL}/courses/{course_id}/modules/{module['id']}/items?per_page=100")
+                
                 for item in items:
                     item_title = item.get('title', 'Untitled')
                     item_type = item.get('type', 'Unknown')
                     
-                    # Build list item with link if available
+                    # Build markdown list item with link if available
                     if 'html_url' in item:
                         html_url = item['html_url']
-                        content += f"<li><a href='{html_url}'>{item_title}</a> ({item_type})</li>"
+                        md_content += f"- [{item_title}]({html_url}) ({item_type})\n"
                         
                         # Download linked files from the item
                         item_resp = requests.get(html_url, headers=HEADERS)
@@ -285,7 +299,7 @@ def main():
                         page_api_url = f"{BASE_API_URL}/courses/{course_id}/pages/{page_url}"
                         # Create a link to the page
                         page_html_url = f"{CANVAS_DOMAIN}/courses/{course_id}/pages/{page_url}"
-                        content += f"<li><a href='{page_html_url}'>{item_title}</a> ({item_type})</li>"
+                        md_content += f"- [{item_title}]({page_html_url}) ({item_type})\n"
                         
                         page_resp = requests.get(page_api_url, headers=HEADERS)
                         if page_resp.ok:
@@ -299,20 +313,19 @@ def main():
                                 file_data = file_meta.json()
                                 file_url = file_data.get('url', '')
                                 if file_url:
-                                    content += f"<li><a href='{file_url}'>{item_title}</a> ({item_type})</li>"
+                                    md_content += f"- [{item_title}]({file_url}) ({item_type})\n"
                                 else:
-                                    content += f"<li>{item_title} ({item_type})</li>"
+                                    md_content += f"- {item_title} ({item_type})\n"
                         except:
-                            content += f"<li>{item_title} ({item_type})</li>"
+                            md_content += f"- {item_title} ({item_type})\n"
                         
                         download_canvas_file_by_id(item['content_id'], course_folder)
                     else:
                         # No link available, just show title and type
-                        content += f"<li>{item_title} ({item_type})</li>"
+                        md_content += f"- {item_title} ({item_type})\n"
 
-                content += "</ul>"
                 name = f"module - {module['name']}"
-                save_html_as_pdf(course_folder, name, content)
+                save_markdown(course_folder, name, md_content)
             except Exception as e:
                 print(f"    Error saving module {module['name']}: {e}")
 
