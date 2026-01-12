@@ -1,0 +1,15 @@
+# Week 1
+
+- [Meet Your Instructor and TA](https://elearn.ucr.edu/courses/213928/modules/items/3375615) (Page)
+- [Tentative Course Schedule*](https://elearn.ucr.edu/courses/213928/modules/items/3375616) (Page)
+- [Academic Integrity Policy Agreement](https://elearn.ucr.edu/courses/213928/modules/items/3375617) (Quiz)
+- [Prerequisites](https://elearn.ucr.edu/courses/213928/modules/items/3375648) (Page)
+- [Prerequisite Test](https://elearn.ucr.edu/courses/213928/modules/items/3375649) (Assignment)
+- [Course Overview Test](https://elearn.ucr.edu/courses/213928/modules/items/3375650) (Assignment)
+- [DISCUSSION: Datasets, projects, and teams](https://elearn.ucr.edu/courses/213928/modules/items/3375652) (Discussion)
+- [HDFS Architecture](https://elearn.ucr.edu/api/v1/courses/213928/module_item_redirect/3375653) (ExternalUrl)
+- [Big-data overview](https://elearn.ucr.edu/courses/213928/modules/items/3375655) (Assignment)
+- [Lecture notes on Big-data Storage.pdf](https://elearn.ucr.edu/courses/213928/modules/items/3375656) (File)
+- [CS226-01-Intro.pdf](https://elearn.ucr.edu/courses/213928/modules/items/3378925) (File)
+- [CS226-02-Big-data-Tour.pdf](https://elearn.ucr.edu/courses/213928/modules/items/3388004) (File)
+- [CS226-03-BigDataStorage.pdf](https://elearn.ucr.edu/courses/213928/modules/items/3388005) (File)
