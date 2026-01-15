@@ -63,6 +63,8 @@ import os
 import re
 import platform
 import shutil
+import zipfile
+import tempfile
 import requests
 import pdfkit
 from bs4 import BeautifulSoup
@@ -133,6 +135,71 @@ def make_safe(name):
     return re.sub(r'[<>:"/\\|?*]', '_', name).strip()
 
 
+def extract_and_save_zip(zip_content, course_folder, zip_filename):
+    """Extract a zip file and save all its contents to the course folder.
+    
+    Args:
+        zip_content: The binary content of the zip file
+        course_folder: The destination folder for extracted files
+        zip_filename: Original zip filename (for logging)
+    
+    Returns:
+        List of extracted file paths
+    """
+    extracted_files = []
+    try:
+        # Create a temporary file to write the zip content
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
+            tmp_file.write(zip_content)
+            tmp_path = tmp_file.name
+        
+        # Extract the zip file
+        with zipfile.ZipFile(tmp_path, 'r') as zip_ref:
+            for member in zip_ref.namelist():
+                # Skip directories and hidden/system files
+                if member.endswith('/') or member.startswith('__MACOSX') or member.startswith('.'):
+                    continue
+                
+                # Get just the filename (flatten directory structure)
+                original_basename = os.path.basename(member)
+                if not original_basename:
+                    continue
+                
+                safe_name = make_safe(original_basename)
+                dest_path = os.path.join(course_folder, safe_name)
+                
+                # Handle duplicate filenames by adding a suffix
+                base, ext = os.path.splitext(safe_name)
+                counter = 1
+                while os.path.exists(dest_path):
+                    safe_name = f"{base}_{counter}{ext}"
+                    dest_path = os.path.join(course_folder, safe_name)
+                    counter += 1
+                
+                # Extract the file content and save it
+                try:
+                    file_content = zip_ref.read(member)
+                    with open(dest_path, 'wb') as f:
+                        f.write(file_content)
+                    extracted_files.append(dest_path)
+                    print(f"      📦 Extracted from zip: {safe_name}")
+                except Exception as e:
+                    print(f"      ⚠️  Error extracting {member}: {e}")
+        
+        # Clean up temporary file
+        os.unlink(tmp_path)
+        print(f"    ✅ Extracted {len(extracted_files)} files from {zip_filename}")
+        
+    except zipfile.BadZipFile:
+        print(f"    ⚠️  {zip_filename} is not a valid zip file, saving as-is")
+        return None  # Signal that it should be saved as regular file
+    except Exception as e:
+        print(f"    ❌ Error extracting zip {zip_filename}: {e}")
+        return None  # Signal that it should be saved as regular file
+    
+    return extracted_files
+
+
 def safe_paginate(url):
     """Safely paginate through API results."""
     results = []
@@ -174,6 +241,20 @@ def save_markdown(folder, name, markdown_content):
         print(f"    Error saving {safe_name}.md: {e}")
 
 
+def save_or_unzip(content, folder, filename):
+    """Save content to file, or unzip if it's a zip file."""
+    if filename.lower().endswith('.zip'):
+        print(f"    📦 Detected ZIP file: {filename}, extracting...")
+        result = extract_and_save_zip(content, folder, filename)
+        if result is not None:
+            return  # Successfully extracted
+    
+    # Not a zip or extraction failed - save as regular file
+    file_path = os.path.join(folder, filename)
+    with open(file_path, 'wb') as f:
+        f.write(content)
+
+
 def download_canvas_file_by_id(file_id, course_folder):
     """Download a Canvas file by its file ID."""
     try:
@@ -188,8 +269,7 @@ def download_canvas_file_by_id(file_id, course_folder):
 
         r = requests.get(download_url, headers=HEADERS)
         r.raise_for_status()
-        with open(os.path.join(course_folder, filename), 'wb') as f:
-            f.write(r.content)
+        save_or_unzip(r.content, course_folder, filename)
 
         downloaded_file_urls.add(download_url)
         print(f"    ✅ Downloaded file from API: {filename}")
@@ -242,8 +322,7 @@ def main():
                 r = requests.get(file_url, headers=HEADERS)
                 r.raise_for_status()
                 file_path = os.path.join(course_folder, make_safe(file['filename']))
-                with open(file_path, 'wb') as f:
-                    f.write(r.content)
+                save_or_unzip(r.content, course_folder, make_safe(file['filename']))
                 downloaded_file_urls.add(file_url)
                 print(f"    ✅ Downloaded file: {make_safe(file['filename'])}")
             except Exception as e:
@@ -340,8 +419,7 @@ def main():
                     filename = make_safe(f"submission - {attachment['filename']}")
                     r = requests.get(file_url, headers=HEADERS)
                     r.raise_for_status()
-                    with open(os.path.join(course_folder, filename), 'wb') as f:
-                        f.write(r.content)
+                    save_or_unzip(r.content, course_folder, filename)
                     downloaded_file_urls.add(file_url)
                     print(f"    ✅ Downloaded submission: {filename}")
                 except Exception as e:
