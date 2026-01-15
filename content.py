@@ -428,7 +428,8 @@ def main():
     print(f"\n✅ All course content downloaded to {DOWNLOADS_BASE}")
     
     # If running in GitHub Actions, commit and push
-    if os.getenv('GITHUB_WORKSPACE'):
+    # If running in GitHub Actions and AUTO_COMMIT is enabled, commit and push
+    if os.getenv('GITHUB_WORKSPACE') and os.getenv('AUTO_COMMIT', 'true').lower() == 'true':
         commit_and_push()
 
 

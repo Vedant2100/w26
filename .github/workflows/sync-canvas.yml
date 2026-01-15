@@ -1,8 +1,7 @@
 name: Sync Canvas Materials
 
 on:
-  schedule:
-    - cron: "0 2 * * *"  # runs daily at 2am UTC
+
   workflow_dispatch:
 
 jobs:
@@ -25,7 +24,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y wkhtmltopdf xvfb
+          sudo apt-get install -y wkhtmltopdf xvfb unzip
 
       - name: Install Python dependencies
         run: |
@@ -41,7 +40,28 @@ jobs:
         env:
           CANVAS_API_TOKEN: ${{ secrets.CANVAS_API_TOKEN }}
           CANVAS_DOMAIN: ${{ secrets.CANVAS_DOMAIN }}
-          AUTO_COMMIT: 'true'
-          AUTO_PUSH: 'true'
+          AUTO_COMMIT: 'false'
+          AUTO_PUSH: 'false'
         run: |
           python content.py
+
+      - name: Extract Zip Files
+        run: |
+          find canvas_all_content -type f -name "*.zip" | while read -r zip_file; do
+            echo "Extracting $zip_file..."
+            # Extract to the same directory as the zip file
+            unzip -o "$zip_file" -d "$(dirname "$zip_file")"
+          done
+
+      - name: Commit and Push
+        run: |
+          # Add all files
+          git add canvas_all_content/
+          
+          # Check for changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update Canvas course content - $(date +'%Y-%m-%d %H:%M:%S')"
+            git push
+          fi
