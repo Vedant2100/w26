@@ -102,8 +102,9 @@ else:
 
 
 # Get Canvas API token and domain from environment variables
-CANVAS_API_TOKEN = os.getenv("CANVAS_API_TOKEN")
-CANVAS_DOMAIN = os.getenv("CANVAS_DOMAIN")
+# Strip whitespace to avoid issues with GitHub Actions secret injection
+CANVAS_API_TOKEN = (os.getenv("CANVAS_API_TOKEN") or "").strip()
+CANVAS_DOMAIN = (os.getenv("CANVAS_DOMAIN") or "").strip()
 
 # Don't raise at import time; instead record missing creds and let main() decide.
 MISSING_CANVAS_CREDS = False
