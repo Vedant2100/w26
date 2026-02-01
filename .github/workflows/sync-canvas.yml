@@ -45,7 +45,7 @@ jobs:
         run: |
           python content.py
 
-      - name: Debug: show download location & files
+      - name: show download location & files
         run: |
           echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
           python - <<'PY'
