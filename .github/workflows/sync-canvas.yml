@@ -49,8 +49,12 @@ jobs:
           python content.py
 
       - name: show download location & files
+        env:
+          CANVAS_API_TOKEN: ${{ secrets.CANVAS_API_TOKEN }}
+          CANVAS_DOMAIN: ${{ secrets.CANVAS_DOMAIN }}
         run: |
           echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          if [ -z "${CANVAS_API_TOKEN:-}" ]; then echo "CANVAS_API_TOKEN: <missing>"; else echo "CANVAS_API_TOKEN: <present>"; fi
           python - <<'PY'
           import content, os
           print("DOWNLOADS_BASE:", content.DOWNLOADS_BASE)
