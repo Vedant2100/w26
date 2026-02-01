@@ -131,6 +131,9 @@ else:
         os.path.expanduser("~"), "Downloads", "canvas_all_content"
     )
 
+# Whether to download student submissions (default: false for privacy)
+DOWNLOAD_SUBMISSIONS = os.getenv("DOWNLOAD_SUBMISSIONS", "false").lower() == "true"
+
 downloaded_file_urls = set()
 
 
@@ -453,24 +456,27 @@ def main():
             except Exception as e:
                 print(f"    Error saving module {module['name']}: {e}")
 
-        print("  Downloading your submissions...")
-        submissions = safe_paginate(
-            f"{BASE_API_URL}/courses/{course_id}/students/submissions?per_page=100"
-        )
-        for sub in submissions:
-            for attachment in sub.get("attachments", []):
-                try:
-                    file_url = attachment["url"]
-                    if file_url in downloaded_file_urls:
-                        continue
-                    filename = make_safe(f"submission - {attachment['filename']}")
-                    r = requests.get(file_url, headers=HEADERS)
-                    r.raise_for_status()
-                    save_or_unzip(r.content, course_folder, filename)
-                    downloaded_file_urls.add(file_url)
-                    print(f"    ✅ Downloaded submission: {filename}")
-                except Exception as e:
-                    print(f"    Error downloading submission file: {e}")
+        if not DOWNLOAD_SUBMISSIONS:
+            print("  ⚠️ Skipping downloading student submissions (DOWNLOAD_SUBMISSIONS=false)")
+        else:
+            print("  Downloading your submissions...")
+            submissions = safe_paginate(
+                f"{BASE_API_URL}/courses/{course_id}/students/submissions?per_page=100"
+            )
+            for sub in submissions:
+                for attachment in sub.get("attachments", []):
+                    try:
+                        file_url = attachment["url"]
+                        if file_url in downloaded_file_urls:
+                            continue
+                        filename = make_safe(f"submission - {attachment['filename']}")
+                        r = requests.get(file_url, headers=HEADERS)
+                        r.raise_for_status()
+                        save_or_unzip(r.content, course_folder, filename)
+                        downloaded_file_urls.add(file_url)
+                        print(f"    ✅ Downloaded submission: {filename}")
+                    except Exception as e:
+                        print(f"    Error downloading submission file: {e}")
 
     print(f"\n✅ All course content downloaded to {DOWNLOADS_BASE}")
 
@@ -478,11 +484,7 @@ def main():
     # If running in GitHub Actions and AUTO_COMMIT is enabled, commit and push
     if (
         os.getenv("GITHUB_WORKSPACE")
-        and os.getenv("AUTO_COMMIT", "true").lower() == "true"
-    ):
-        commit_and_push()
-
-
+    and os.getenv("AUTO_COMMIT", "false").lower() == "true"
 def commit_and_push():
     """Commit and push downloaded files to git (GitHub Actions only)."""
     import subprocess
@@ -490,6 +492,8 @@ def commit_and_push():
 
     try:
         repo_dir = os.getenv("GITHUB_WORKSPACE")
+        auto_push = os.getenv("AUTO_PUSH", "false").lower() == "true"
+        target_branch = os.getenv("TARGET_BRANCH", "course")
 
         # Check if there are any changes
         result = subprocess.run(
@@ -515,10 +519,17 @@ def commit_and_push():
         )
         print(f"✅ Committed changes: {commit_message}")
 
-        # Push to remote
-        print("🚀 Pushing to remote repository...")
-        subprocess.run(["git", "push"], cwd=repo_dir, check=True)
-        print("✅ Pushed to remote repository")
+        # Push to remote only if AUTO_PUSH=true
+        if auto_push:
+            print(f"🚀 Pushing to remote branch '{target_branch}'...")
+            subprocess.run(
+                ["git", "push", "origin", f"HEAD:refs/heads/{target_branch}"],
+                cwd=repo_dir,
+                check=True,
+            )
+            print("✅ Pushed to remote repository")
+        else:
+            print("AUTO_PUSH is false; skipping git push. You can manually push to your branch later.")
 
     except subprocess.CalledProcessError as e:
         print(f"⚠️  Error during git operation: {e}")
