@@ -105,18 +105,23 @@ else:
 CANVAS_API_TOKEN = os.getenv("CANVAS_API_TOKEN")
 CANVAS_DOMAIN = os.getenv("CANVAS_DOMAIN")
 
-# Validate that required environment variables are set
+# Don't raise at import time; instead record missing creds and let main() decide.
+MISSING_CANVAS_CREDS = False
 if not CANVAS_API_TOKEN:
-    raise ValueError(
-        "CANVAS_API_TOKEN environment variable is not set. "
-        "Please set it before running the script."
-    )
+    print("⚠️  CANVAS_API_TOKEN is not set. Some operations will fail without it.")
+    MISSING_CANVAS_CREDS = True
 
 if not CANVAS_DOMAIN:
-    raise ValueError(
-        "CANVAS_DOMAIN environment variable is not set. "
-        "Please set it before running the script (e.g., 'https://canvas.pitt.edu')."
-    )
+    print("⚠️  CANVAS_DOMAIN is not set. Some operations will fail without it.")
+    MISSING_CANVAS_CREDS = True
+
+
+def ensure_canvas_creds():
+    """Raise a clear error if required Canvas credentials are missing."""
+    if MISSING_CANVAS_CREDS:
+        raise RuntimeError(
+            "Canvas API credentials are missing. Set CANVAS_API_TOKEN and CANVAS_DOMAIN in the environment or repo secrets."
+        )
 
 BASE_API_URL = f"{CANVAS_DOMAIN}/api/v1"
 HEADERS = {"Authorization": f"Bearer {CANVAS_API_TOKEN}"}
@@ -313,6 +318,14 @@ def main():
     """Main workflow to download all course content."""
     # Ensure the downloads directory exists
     os.makedirs(DOWNLOADS_BASE, exist_ok=True)
+
+    # Ensure credentials are present; raise a friendly message if not.
+    try:
+        ensure_canvas_creds()
+    except RuntimeError as e:
+        print(f"❌ {e}")
+        print("Exiting. If you're running in GitHub Actions, ensure the secrets are set in the repository and the workflow step has the correct env.")
+        return
 
     print("Fetching your Canvas courses...")
 
