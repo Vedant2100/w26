@@ -123,6 +123,7 @@ def ensure_canvas_creds():
             "Canvas API credentials are missing. Set CANVAS_API_TOKEN and CANVAS_DOMAIN in the environment or repo secrets."
         )
 
+
 BASE_API_URL = f"{CANVAS_DOMAIN}/api/v1"
 HEADERS = {"Authorization": f"Bearer {CANVAS_API_TOKEN}"}
 
@@ -324,7 +325,9 @@ def main():
         ensure_canvas_creds()
     except RuntimeError as e:
         print(f"❌ {e}")
-        print("Exiting. If you're running in GitHub Actions, ensure the secrets are set in the repository and the workflow step has the correct env.")
+        print(
+            "Exiting. If you're running in GitHub Actions, ensure the secrets are set in the repository and the workflow step has the correct env."
+        )
         return
 
     print("Fetching your Canvas courses...")
@@ -470,7 +473,9 @@ def main():
                 print(f"    Error saving module {module['name']}: {e}")
 
         if not DOWNLOAD_SUBMISSIONS:
-            print("  ⚠️ Skipping downloading student submissions (DOWNLOAD_SUBMISSIONS=false)")
+            print(
+                "  ⚠️ Skipping downloading student submissions (DOWNLOAD_SUBMISSIONS=false)"
+            )
         else:
             print("  Downloading your submissions...")
             submissions = safe_paginate(
@@ -497,7 +502,11 @@ def main():
     # If running in GitHub Actions and AUTO_COMMIT is enabled, commit and push
     if (
         os.getenv("GITHUB_WORKSPACE")
-    and os.getenv("AUTO_COMMIT", "false").lower() == "true"
+        and os.getenv("AUTO_COMMIT", "false").lower() == "true"
+    ):
+        commit_and_push()
+
+
 def commit_and_push():
     """Commit and push downloaded files to git (GitHub Actions only)."""
     import subprocess
@@ -542,7 +551,9 @@ def commit_and_push():
             )
             print("✅ Pushed to remote repository")
         else:
-            print("AUTO_PUSH is false; skipping git push. You can manually push to your branch later.")
+            print(
+                "AUTO_PUSH is false; skipping git push. You can manually push to your branch later."
+            )
 
     except subprocess.CalledProcessError as e:
         print(f"⚠️  Error during git operation: {e}")
