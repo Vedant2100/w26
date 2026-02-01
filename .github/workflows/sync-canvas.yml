@@ -10,8 +10,6 @@ jobs:
     permissions:
       contents: write  # Required to push to the repository
     env:
-      CANVAS_API_TOKEN: ${{ secrets.CANVAS_API_TOKEN }}
-      CANVAS_DOMAIN: ${{ secrets.CANVAS_DOMAIN }}
       AUTO_COMMIT: 'true'
       AUTO_PUSH: 'true'
       DOWNLOAD_SUBMISSIONS: 'false'
@@ -44,6 +42,9 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Run Canvas Course Downloader
+        env:
+          CANVAS_API_TOKEN: ${{ secrets.CANVAS_API_TOKEN }}
+          CANVAS_DOMAIN: ${{ secrets.CANVAS_DOMAIN }}
         run: |
           python content.py
 
