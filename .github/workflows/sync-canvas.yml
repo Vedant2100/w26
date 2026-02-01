@@ -49,9 +49,9 @@ jobs:
         run: |
           echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
           python - <<'PY'
-import content, os
-print("DOWNLOADS_BASE:", content.DOWNLOADS_BASE)
-PY
+          import content, os
+          print("DOWNLOADS_BASE:", content.DOWNLOADS_BASE)
+          PY
           echo "Files under repo root:"
           ls -la
           echo "Files under canvas_all_content (if exists):"
