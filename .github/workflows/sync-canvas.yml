@@ -45,6 +45,18 @@ jobs:
         run: |
           python content.py
 
+      - name: Debug: show download location & files
+        run: |
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          python - <<'PY'
+import content, os
+print("DOWNLOADS_BASE:", content.DOWNLOADS_BASE)
+PY
+          echo "Files under repo root:"
+          ls -la
+          echo "Files under canvas_all_content (if exists):"
+          ls -la canvas_all_content || echo "No canvas_all_content directory"
+
       - name: Extract Zip Files
         run: |
           find canvas_all_content -type f -name "*.zip" | while read -r zip_file; do
@@ -55,9 +67,12 @@ jobs:
 
       - name: Commit and Push
         run: |
-          # Add all files
-          git add canvas_all_content/
-          
+          # Show git status for debugging
+          git status --porcelain
+
+          # Add all files in the repository (more robust than adding a single path)
+          git add -A
+
           # Check for changes
           if git diff --staged --quiet; then
             echo "No changes to commit."
