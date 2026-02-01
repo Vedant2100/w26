@@ -206,13 +206,3 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-
-*.pdf
-
-# Allow Canvas downloads in the repository even though PDFs are generally ignored
-# We keep general `*.pdf` ignored, but explicitly allow PDFs and other files in
-# `canvas_all_content/` so downloaded course materials can be committed.
-# Note: order matters in .gitignore — these rules override the global `*.pdf` above.
-!canvas_all_content/
-!canvas_all_content/**
-!canvas_all_content/**/*.pdf
