@@ -61,6 +61,7 @@ Notes:
 
 import os
 import re
+import json
 import platform
 import shutil
 import zipfile
@@ -101,6 +102,20 @@ else:
         pdfkit_config = pdfkit.configuration()
 
 
+# Configuration from config.json
+# Load configuration file, with fallback to environment variables
+CONFIG = {}
+try:
+    config_path = os.path.join(os.path.dirname(__file__), "config.json")
+    if os.path.exists(config_path):
+        with open(config_path, "r") as f:
+            CONFIG = json.load(f)
+        print(f"✓ Loaded configuration from {config_path}")
+except Exception as e:
+    print(f"⚠️  Could not load config.json: {e}")
+    CONFIG = {}
+
+
 # Get Canvas API token and domain from environment variables
 # Strip whitespace to avoid issues with GitHub Actions secret injection
 CANVAS_API_TOKEN = (os.getenv("CANVAS_API_TOKEN") or "").strip()
@@ -128,18 +143,24 @@ def ensure_canvas_creds():
 BASE_API_URL = f"{CANVAS_DOMAIN}/api/v1"
 HEADERS = {"Authorization": f"Bearer {CANVAS_API_TOKEN}"}
 
-# Determine where to save files - use repo directory if in GitHub Actions, otherwise Downloads
+# Determine where to save files - use config or repo directory if in GitHub Actions, otherwise Downloads
+config_output = CONFIG.get("output", {})
+base_dir_config = config_output.get("base_directory", "canvas_all_content")
+
 if os.getenv("GITHUB_WORKSPACE"):
     # Running in GitHub Actions - save to repo
-    DOWNLOADS_BASE = os.path.join(os.getenv("GITHUB_WORKSPACE"), "canvas_all_content")
+    DOWNLOADS_BASE = os.path.join(os.getenv("GITHUB_WORKSPACE"), base_dir_config)
 else:
     # Running locally - save to Downloads
-    DOWNLOADS_BASE = os.path.join(
-        os.path.expanduser("~"), "Downloads", "canvas_all_content"
-    )
+    DOWNLOADS_BASE = os.path.join(os.path.expanduser("~"), "Downloads", base_dir_config)
 
-# Whether to download student submissions (default: false for privacy)
-DOWNLOAD_SUBMISSIONS = os.getenv("DOWNLOAD_SUBMISSIONS", "false").lower() == "true"
+# Whether to download student submissions (from config, with env override)
+config_sync = CONFIG.get("sync", {})
+download_submissions_config = config_sync.get("download_submissions", False)
+DOWNLOAD_SUBMISSIONS = (
+    os.getenv("DOWNLOAD_SUBMISSIONS", "false").lower() == "true"
+    or download_submissions_config
+)
 
 downloaded_file_urls = set()
 

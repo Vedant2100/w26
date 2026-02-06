@@ -1,0 +1,28 @@
+{
+  "sync": {
+    "enabled": true,
+    "cutoff_date": "2026-03-13",
+    "auto_commit": true,
+    "auto_push": true,
+    "target_branch": "course",
+    "download_submissions": false
+  },
+  "courses": {
+    "include_all": false,
+    "course_ids": [
+      "CS_226_001_26W - BIG-DATA MANAGEMENT",
+      "CS_202_001_26W - ADVANCED OPERATING SYSTEMS",
+      "INTRODUCTION TO DEEP LEARNING (CS_228_001_26W, EE_228_001_26W) - CL"
+    ],
+    "exclude": []
+  },
+  "output": {
+    "base_directory": "courses",
+    "extract_zips": true,
+    "overwrite_existing": true
+  },
+  "logging": {
+    "verbose": false,
+    "log_file": "sync.log"
+  }
+}

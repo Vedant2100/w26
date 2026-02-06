@@ -1,7 +1,8 @@
 name: Sync Canvas Materials
 
 on:
-
+  schedule:
+    - cron: '0 0 */4 * *'
   workflow_dispatch:
 
 jobs:
@@ -9,17 +10,36 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write  # Required to push to the repository
-    env:
-      AUTO_COMMIT: 'true'
-      AUTO_PUSH: 'true'
-      DOWNLOAD_SUBMISSIONS: 'false'
-      TARGET_BRANCH: 'course'
-
     steps:
       - name: Check out repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Fetch all history for proper git operations
+
+      - name: Load config and set environment variables
+        run: |
+          python << 'PYEOF'
+          import json
+          import os
+          config = json.load(open('config.json'))
+          sync_config = config.get('sync', {})
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+            f.write(f"AUTO_COMMIT={str(sync_config.get('auto_commit', True)).lower()}\n")
+            f.write(f"AUTO_PUSH={str(sync_config.get('auto_push', True)).lower()}\n")
+            f.write(f"TARGET_BRANCH={sync_config.get('target_branch', 'course')}\n")
+            f.write(f"DOWNLOAD_SUBMISSIONS={str(sync_config.get('download_submissions', False)).lower()}\n")
+          PYEOF
+
+      - name: Check if before cutoff date
+        run: |
+          # Read cutoff date from config.json
+          CUTOFF_DATE=$(python -c "import json; data=json.load(open('config.json')); print(data.get('sync', {}).get('cutoff_date', '2099-12-31'))")
+          TODAY=$(date +%Y-%m-%d)
+          if [[ "$TODAY" > "$CUTOFF_DATE" ]]; then
+            echo "Current date ($TODAY) is after cutoff date ($CUTOFF_DATE). Skipping sync."
+            exit 0
+          fi
+          echo "Within sync window. Proceeding..."
 
       - name: Set up Python
         uses: actions/setup-python@v5
