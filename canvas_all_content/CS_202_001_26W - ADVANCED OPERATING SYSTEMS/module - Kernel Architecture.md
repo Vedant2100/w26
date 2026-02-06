@@ -7,3 +7,4 @@
 - [Lecture7: Xen](https://elearn.ucr.edu/api/v1/courses/208327/module_item_redirect/3411913) (ExternalUrl)
 - [architecture3.pdf](https://elearn.ucr.edu/files/23538284/download?download_frd=1&verifier=oqTpwiN3GOfLZTj3NLVfagyFghIyBWGdZ8X57ytn) (File)
 - [Lecture8: Multi-kernel](https://elearn.ucr.edu/api/v1/courses/208327/module_item_redirect/3486219) (ExternalUrl)
+- [architecture4.pdf](https://elearn.ucr.edu/files/23554261/download?download_frd=1&verifier=DUIJHUvAHr4wfWG4t21SbxUHrT3dOjjgjizOV87b) (File)
