@@ -88,7 +88,12 @@ jobs:
             git commit -m "Update Canvas course content - $(date +'%Y-%m-%d %H:%M:%S')"
             if [ "${AUTO_PUSH:-false}" = "true" ]; then
               echo "Pushing to branch ${TARGET_BRANCH:-course}"
-              git push origin HEAD:refs/heads/"${TARGET_BRANCH:-course}"
+              # Ensure the branch exists on remote, then push
+              git fetch origin "${TARGET_BRANCH:-course}" 2>/dev/null || true
+              git push -u origin HEAD:refs/heads/"${TARGET_BRANCH:-course}" || {
+                echo "⚠️  Standard push failed, attempting force push..."
+                git push -f origin HEAD:refs/heads/"${TARGET_BRANCH:-course}"
+              }
             else
               echo "AUTO_PUSH is false; skipping push."
             fi
