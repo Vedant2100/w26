@@ -141,6 +141,12 @@ else:
 # Whether to download student submissions (default: false for privacy)
 DOWNLOAD_SUBMISSIONS = os.getenv("DOWNLOAD_SUBMISSIONS", "false").lower() == "true"
 
+# Courses to skip during download (by exact course name match)
+COURSES_TO_SKIP = [
+    "SHAPE Student Training - UCR - 2025-2026",
+    "Stay TA Ready",
+]
+
 downloaded_file_urls = set()
 
 
@@ -341,6 +347,13 @@ def main():
     for course in courses:
         course_id = course["id"]
         course_name = make_safe(course.get("name") or f"course_{course_id}")
+
+        # Skip excluded courses
+        if course_name in COURSES_TO_SKIP:
+            print(f"\nCourse: {course_name}")
+            print("  ⏭️  Skipping (course is in exclusion list)")
+            continue
+
         print(f"\nCourse: {course_name}")
         course_folder = os.path.join(DOWNLOADS_BASE, course_name)
         os.makedirs(course_folder, exist_ok=True)
