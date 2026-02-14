@@ -7,3 +7,4 @@
 - [ACM-based-project-template.docx](https://elearn.ucr.edu/files/22773391/download?download_frd=1&verifier=9z6bLgJaSoNEEiLpmtZJnMtEYujtYlWkZZixE7P1) (File)
 - [Project Proposal Presentation](https://elearn.ucr.edu/courses/213928/modules/items/3375640) (Assignment)
 - [Project Literature Survey](https://elearn.ucr.edu/courses/213928/modules/items/3375644) (Assignment)
+- [CS226-Literature-Survey Sample.pdf](https://elearn.ucr.edu/files/23762682/download?download_frd=1&verifier=0jcPqPtRXKBDnTfP5pTf7yAJ5H12Wu7F8oYDjctT) (File)
