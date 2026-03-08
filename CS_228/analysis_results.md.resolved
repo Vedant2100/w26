@@ -1,0 +1,68 @@
+# Experiment Results Analysis — 20260308_185717_bot_sweep
+
+**Config**: 2 models × 4 envs × 2 buffer sizes (2, 3) × 3 history windows (1, 2, 3) × 5 episodes = **240 episodes**, **9,908 action steps**
+
+## Success Rates
+
+| Environment | buf=2 hw=1 | buf=2 hw=2 | buf=2 hw=3 | buf=3 hw=1 | buf=3 hw=2 | buf=3 hw=3 |
+|---|---|---|---|---|---|---|
+| **Empty-8x8** | **100%** | **100%** | **100%** | **100%** | **100%** | **100%** |
+| **LavaGapS7** | 0% | 0% | **20%** | 10% | 0% | 0% |
+| **DoorKey-5x5** | 0% | 0% | 0% | 0% | 0% | 0% |
+| **BlockedUnlockPickup** | 0% | 0% | 0% | 0% | 0% | 0% |
+
+## Parsing Consistency
+
+**0 mismatches out of 9,908 actions.** The LLM outputs clean single tokens (`forward`, `turn_left`, etc.) every time. Parsing is not the problem.
+
+## Root Cause Analysis
+
+### ✅ Empty-8x8 — Works Perfectly
+- Simple straight-line navigation with no obstacles
+- LLM correctly uses `forward` (82%) and `turn_left` (18%) to navigate to goal
+- Average 18–24 steps to reach goal at [6,6]
+
+### ❌ LavaGapS7 — `turn_left` Loop (78.9% of all actions)
+
+**Failure mode**: The LLM gets **stuck spinning in place**.
+
+Typical trace: 50× `turn_left` at position [1,1]. The observation says "The path in front is clear" (when facing non-lava) but the agent just keeps turning.
+
+**One successful episode** (buf=2, hw=3, 7B model) shows the model *can* navigate when it goes right → down → past the lava gap. It found the corridor at x=5 (right edge) which has no lava. But this was luck — it happened to go `forward` enough times early on.
+
+**Why**: The 3B model sees "lava" in the observation and gets fixated on avoidance (always `turn_left`). It never develops a plan to go *around* the lava.
+
+### ❌ DoorKey-5x5 — Picks Up Key, Then Loops
+
+**Interesting**: In the buf=3 run, the agent actually **picks up the key** on step 0 (key was directly in front). Step 1 confirms the key disappeared from "Nearby objects" — meaning the agent successfully acquired it.
+
+**But then**: After pickup, the agent enters an infinite `turn_left` loop. It faces the locked door on step 3/7 ("In front of you is a door") but **never uses `toggle`**. It doesn't understand that holding a key + facing a door → toggle.
+
+**Why**: The observation **doesn't mention inventory**. The agent has no way to know it's holding the key. This is a missing feature in `get_text_obs`.
+
+### ❌ BlockedUnlockPickup — Faces Key, Never Picks Up
+
+The agent faces the key **30 times** across episodes ("In front of you is a key") but always outputs `turn_left` instead of `pickup`.
+
+**Why**: The template says "Navigate to the object → Face the object → Use pickup action" but the model doesn't follow multi-step reasoning. It sees complex state (key + door + ball + box) and defaults to `turn_left`.
+
+## Key Issues
+
+> [!IMPORTANT]
+> ### 1. `turn_left` Is the Default Failure Mode
+> When the 3B model doesn't know what to do, it outputs `turn_left`. This creates an infinite spin-in-place loop. **78.9% of LavaGap actions** and **70.6% of DoorKey actions** are `turn_left`.
+
+> [!WARNING]
+> ### 2. No Inventory State in Observation
+> `get_text_obs()` never reports what the agent is carrying. After picking up the key, the observation drops the key from "Nearby objects" but doesn't say "You are carrying: yellow key." The agent has no way to know it should `toggle` the door.
+
+> [!NOTE]
+> ### 3. Templates Don't Help for 3B
+> Buffer size 2 vs 3 makes no meaningful difference in success rate. The 3B model doesn't follow the multi-step reasoning patterns in templates — it just outputs a single action token regardless.
+
+## Recommendations
+
+1. **Add inventory to observation**: `"You are carrying: yellow key."` after pickup
+2. **Add loop detection**: If the agent repeats the same action 4+ times, force a different action
+3. **Test with 7B only**: The 3B model fundamentally lacks the spatial reasoning capability
+4. **Consider few-shot prompting**: Show the LLM an example of correct behavior in the system prompt
