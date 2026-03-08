@@ -1,9 +1,9 @@
 # %%
-%pip install -q minigrid gymnasium transformers accelerate torch sentencepiece
+# %pip install -q minigrid gymnasium transformers accelerate torch sentencepiece
 
 
 # %%
-# %pip install --upgrade torch torchvision torchaudio
+# # %pip install --upgrade torch torchvision torchaudio
 
 
 # %%
@@ -26,6 +26,11 @@ from minigrid.wrappers import FullyObsWrapper
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import seaborn as sns
+from tqdm import tqdm
+
+# Use non-interactive backend for Modal/Server
+import matplotlib
+matplotlib.use('Agg')
 
 
 # %%
@@ -237,8 +242,8 @@ class MinigridTextWrapper:
 
         return desc
 
-    def reset(self):
-        reset_out = self.env.reset()
+    def reset(self, seed=None):
+        reset_out = self.env.reset(seed=seed) if seed is not None else self.env.reset()
         if isinstance(reset_out, tuple) and len(reset_out) == 2:
             obs, _ = reset_out
         else:
@@ -471,6 +476,9 @@ def run_bot_experiments(model_names, environments, n_episodes_list, max_steps_li
     resolved_envs = _resolve_environment_pairs(environments)
     frames = []; all_action_logs = []; errors = []
     
+    total_conditions = len(model_names) * len(resolved_envs) * len(n_episodes_list) * len(max_steps_list) * len(buffer_sizes) * len(history_windows)
+    pbar = tqdm(total=total_conditions, desc="Overall Progress")
+    
     for model_name in model_names:
         llm_client = LLMClient(model_name=model_name, max_new_tokens=max_new_tokens, temperature=temperature, mock=mock)
         for canonical_name, resolved_env_id in resolved_envs:
@@ -479,10 +487,13 @@ def run_bot_experiments(model_names, environments, n_episodes_list, max_steps_li
                     for buffer_size in buffer_sizes:
                         for history_window in history_windows:
                             try:
-                                print(f"Running {model_name} on {canonical_name} (buf={buffer_size}, k={history_window})")
+                                # Update progress bar with current condition
+                                pbar.set_postfix({"model": model_name.split('/')[-1], "env": canonical_name.split('-')[1]})
+                                
                                 env = MinigridTextWrapper(resolved_env_id)
                                 buffer_mgr = BufferManager(buffer_size=buffer_size)
                                 results = []
+                                # Optional: inner progress bar for episodes if n_episodes is large
                                 for i in range(n_episodes):
                                     agent = BoTAgent(llm_client, buffer_mgr, use_history=True, history_window=history_window)
                                     # Reset metrics for this episode
@@ -500,9 +511,12 @@ def run_bot_experiments(model_names, environments, n_episodes_list, max_steps_li
                                         entry.update({"model": model_name, "env": canonical_name, "episode": i, "buffer_size": buffer_size, "history_window": history_window})
                                     all_action_logs.extend(agent.action_log)
                                 frames.append(pd.DataFrame(results))
+                                pbar.update(1)
                             except Exception as e:
                                 print(f"Error: {e}")
                                 errors.append({"model": model_name, "env": canonical_name, "error": str(e)})
+                                pbar.update(1)
+    pbar.close()
                                 
     all_results = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
     combined_logs = pd.concat([pd.DataFrame(l) for l in [all_action_logs] if l], ignore_index=True) if all_action_logs else pd.DataFrame()
@@ -659,7 +673,7 @@ else:
     summary = df.groupby(["model", "env", "buffer_size", "history_window"])[
         ["success", "steps", "reward", "tokens", "time"]
     ].mean()
-    display(summary)
+    print(summary)
 
 
 # %%
@@ -732,9 +746,9 @@ print(f"Action log rows: {len(action_logs)}")
 print(f"Errors: {len(run_errors)}")
 print(f"Saved to: {run_artifacts['run_dir']}")
 
-display(all_results.head(10))
+print(all_results.head(10))
 if not run_errors.empty:
-    display(run_errors.head(10))
+    print(run_errors.head(10))
 
 
 # %%
@@ -835,7 +849,7 @@ else:
     summary = df.groupby(["model", "env", "buffer_size", "history_window"])[
         ["success", "steps", "reward", "tokens", "time"]
     ].mean()
-    display(summary)
+    print(summary)
 
 
 # %%

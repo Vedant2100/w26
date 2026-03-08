@@ -1,0 +1,19 @@
+# Exclude output directories from the image build
+CS 228/
+"CS 228"
+"CS 228/*"
+outputs/
+run_log.log
+
+# Standard ignores
+__pycache__/
+*.pyc
+.git/
+.ipynb_checkpoints/
+.DS_Store
+
+# Ignore the results of the script itself
+*.png
+summary.csv
+actions.csv
+metadata.json
