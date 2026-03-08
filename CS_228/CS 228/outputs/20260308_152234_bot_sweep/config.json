@@ -1,0 +1,20 @@
+{
+  "model_candidates": [
+    "Qwen/Qwen2.5-7B-Instruct"
+  ],
+  "mock_mode": false,
+  "history_window": 3,
+  "environments": [
+    "MiniGrid-LavaGapS7-v0",
+    "MiniGrid-BlockedUnlockPickup-v0",
+    "MiniGrid-DoorKey-5x5-v0",
+    "MiniGrid-Empty-8x8-v0"
+  ],
+  "n_episodes_list": [
+    10
+  ],
+  "max_steps_list": [
+    50,
+    100
+  ]
+}
