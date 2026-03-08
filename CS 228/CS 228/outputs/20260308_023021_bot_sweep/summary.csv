@@ -1,0 +1,9 @@
+model,env,n_episodes_setting,max_steps,success,steps,reward,tokens,time
+Qwen/Qwen2.5-3B-Instruct,MiniGrid-BlockedUnlockPickup-v0,10,50,0.0,50.0,0.0,617.1,34.704630613327026
+Qwen/Qwen2.5-3B-Instruct,MiniGrid-BlockedUnlockPickup-v0,10,100,0.0,100.0,0.0,1246.2,68.76298599243164
+Qwen/Qwen2.5-3B-Instruct,MiniGrid-DoorKey-5x5-v0,10,50,0.0,50.0,0.0,685.5,38.28070528507233
+Qwen/Qwen2.5-3B-Instruct,MiniGrid-DoorKey-5x5-v0,10,100,0.0,100.0,0.0,1370.1,76.17067868709564
+Qwen/Qwen2.5-3B-Instruct,MiniGrid-Empty-8x8-v0,10,50,1.0,24.0,0.915625,286.0,16.13501331806183
+Qwen/Qwen2.5-3B-Instruct,MiniGrid-Empty-8x8-v0,10,100,1.0,24.0,0.915625,286.0,15.971931600570679
+Qwen/Qwen2.5-3B-Instruct,MiniGrid-LavaGapS7-v0,10,50,0.3,38.6,0.28346938775510205,547.8,31.07465147972107
+Qwen/Qwen2.5-3B-Instruct,MiniGrid-LavaGapS7-v0,10,100,0.3,73.6,0.28346938775510205,953.9,52.70225481986999

@@ -1,0 +1,81 @@
+model,env,resolved_env,n_episodes_setting,max_steps,error
+Qwen/Qwen2.5-3B-Instruct,MiniGrid-LavaGapS7-v0,MiniGrid-LavaGapS7-v0,10,50,"
+AutoModelForCausalLM requires the PyTorch library but it was not found in your environment. Check out the instructions on the
+installation page: https://pytorch.org/get-started/locally/ and follow the ones that match your environment.
+Please note that you may need to restart your runtime after installation.
+"
+Qwen/Qwen2.5-3B-Instruct,MiniGrid-LavaGapS7-v0,MiniGrid-LavaGapS7-v0,10,100,"
+AutoModelForCausalLM requires the PyTorch library but it was not found in your environment. Check out the instructions on the
+installation page: https://pytorch.org/get-started/locally/ and follow the ones that match your environment.
+Please note that you may need to restart your runtime after installation.
+"
+Qwen/Qwen2.5-3B-Instruct,MiniGrid-BlockedUnlockPickup-v0,MiniGrid-BlockedUnlockPickup-v0,10,50,"
+AutoModelForCausalLM requires the PyTorch library but it was not found in your environment. Check out the instructions on the
+installation page: https://pytorch.org/get-started/locally/ and follow the ones that match your environment.
+Please note that you may need to restart your runtime after installation.
+"
+Qwen/Qwen2.5-3B-Instruct,MiniGrid-BlockedUnlockPickup-v0,MiniGrid-BlockedUnlockPickup-v0,10,100,"
+AutoModelForCausalLM requires the PyTorch library but it was not found in your environment. Check out the instructions on the
+installation page: https://pytorch.org/get-started/locally/ and follow the ones that match your environment.
+Please note that you may need to restart your runtime after installation.
+"
+Qwen/Qwen2.5-3B-Instruct,MiniGrid-DoorKey-5x5-v0,MiniGrid-DoorKey-5x5-v0,10,50,"
+AutoModelForCausalLM requires the PyTorch library but it was not found in your environment. Check out the instructions on the
+installation page: https://pytorch.org/get-started/locally/ and follow the ones that match your environment.
+Please note that you may need to restart your runtime after installation.
+"
+Qwen/Qwen2.5-3B-Instruct,MiniGrid-DoorKey-5x5-v0,MiniGrid-DoorKey-5x5-v0,10,100,"
+AutoModelForCausalLM requires the PyTorch library but it was not found in your environment. Check out the instructions on the
+installation page: https://pytorch.org/get-started/locally/ and follow the ones that match your environment.
+Please note that you may need to restart your runtime after installation.
+"
+Qwen/Qwen2.5-3B-Instruct,MiniGrid-Empty-8x8-v0,MiniGrid-Empty-8x8-v0,10,50,"
+AutoModelForCausalLM requires the PyTorch library but it was not found in your environment. Check out the instructions on the
+installation page: https://pytorch.org/get-started/locally/ and follow the ones that match your environment.
+Please note that you may need to restart your runtime after installation.
+"
+Qwen/Qwen2.5-3B-Instruct,MiniGrid-Empty-8x8-v0,MiniGrid-Empty-8x8-v0,10,100,"
+AutoModelForCausalLM requires the PyTorch library but it was not found in your environment. Check out the instructions on the
+installation page: https://pytorch.org/get-started/locally/ and follow the ones that match your environment.
+Please note that you may need to restart your runtime after installation.
+"
+Qwen/Qwen2.5-7B-Instruct,MiniGrid-LavaGapS7-v0,MiniGrid-LavaGapS7-v0,10,50,"
+AutoModelForCausalLM requires the PyTorch library but it was not found in your environment. Check out the instructions on the
+installation page: https://pytorch.org/get-started/locally/ and follow the ones that match your environment.
+Please note that you may need to restart your runtime after installation.
+"
+Qwen/Qwen2.5-7B-Instruct,MiniGrid-LavaGapS7-v0,MiniGrid-LavaGapS7-v0,10,100,"
+AutoModelForCausalLM requires the PyTorch library but it was not found in your environment. Check out the instructions on the
+installation page: https://pytorch.org/get-started/locally/ and follow the ones that match your environment.
+Please note that you may need to restart your runtime after installation.
+"
+Qwen/Qwen2.5-7B-Instruct,MiniGrid-BlockedUnlockPickup-v0,MiniGrid-BlockedUnlockPickup-v0,10,50,"
+AutoModelForCausalLM requires the PyTorch library but it was not found in your environment. Check out the instructions on the
+installation page: https://pytorch.org/get-started/locally/ and follow the ones that match your environment.
+Please note that you may need to restart your runtime after installation.
+"
+Qwen/Qwen2.5-7B-Instruct,MiniGrid-BlockedUnlockPickup-v0,MiniGrid-BlockedUnlockPickup-v0,10,100,"
+AutoModelForCausalLM requires the PyTorch library but it was not found in your environment. Check out the instructions on the
+installation page: https://pytorch.org/get-started/locally/ and follow the ones that match your environment.
+Please note that you may need to restart your runtime after installation.
+"
+Qwen/Qwen2.5-7B-Instruct,MiniGrid-DoorKey-5x5-v0,MiniGrid-DoorKey-5x5-v0,10,50,"
+AutoModelForCausalLM requires the PyTorch library but it was not found in your environment. Check out the instructions on the
+installation page: https://pytorch.org/get-started/locally/ and follow the ones that match your environment.
+Please note that you may need to restart your runtime after installation.
+"
+Qwen/Qwen2.5-7B-Instruct,MiniGrid-DoorKey-5x5-v0,MiniGrid-DoorKey-5x5-v0,10,100,"
+AutoModelForCausalLM requires the PyTorch library but it was not found in your environment. Check out the instructions on the
+installation page: https://pytorch.org/get-started/locally/ and follow the ones that match your environment.
+Please note that you may need to restart your runtime after installation.
+"
+Qwen/Qwen2.5-7B-Instruct,MiniGrid-Empty-8x8-v0,MiniGrid-Empty-8x8-v0,10,50,"
+AutoModelForCausalLM requires the PyTorch library but it was not found in your environment. Check out the instructions on the
+installation page: https://pytorch.org/get-started/locally/ and follow the ones that match your environment.
+Please note that you may need to restart your runtime after installation.
+"
+Qwen/Qwen2.5-7B-Instruct,MiniGrid-Empty-8x8-v0,MiniGrid-Empty-8x8-v0,10,100,"
+AutoModelForCausalLM requires the PyTorch library but it was not found in your environment. Check out the instructions on the
+installation page: https://pytorch.org/get-started/locally/ and follow the ones that match your environment.
+Please note that you may need to restart your runtime after installation.
+"
