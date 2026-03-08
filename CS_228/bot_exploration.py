@@ -41,15 +41,15 @@ MODEL_CANDIDATES = [
 MAX_NEW_TOKENS = 16
 TEMPERATURE = 0.7
 MOCK_MODE = False
-HISTORY_WINDOWS = (1, 2, 3)
+HISTORY_WINDOWS = (0, 1, 2)
 ENVIRONMENTS = [
     "MiniGrid-LavaGapS7-v0",
     "MiniGrid-BlockedUnlockPickup-v0",
     "MiniGrid-DoorKey-5x5-v0",
     "MiniGrid-Empty-8x8-v0",
 ]
-N_EPISODES_LIST = (5,)
-MAX_STEPS_LIST = (50,)
+N_EPISODES_LIST = (10,)
+MAX_STEPS_LIST = (100,)
 BUFFER_SIZES = (2, 3)
 OUTPUT_ROOT = "CS 228/outputs"
 RUN_TAG = "bot_sweep"
@@ -481,14 +481,17 @@ def run_bot_experiments(model_names, environments, n_episodes_list, max_steps_li
     
     for model_name in model_names:
         llm_client = LLMClient(model_name=model_name, max_new_tokens=max_new_tokens, temperature=temperature, mock=mock)
+        print(f"\n--- Starting Model: {model_name} ---")
         for canonical_name, resolved_env_id in resolved_envs:
             for n_episodes in n_episodes_list:
                 for max_steps in max_steps_list:
                     for buffer_size in buffer_sizes:
                         for history_window in history_windows:
                             try:
-                                # Update progress bar with current condition
-                                pbar.set_postfix({"model": model_name.split('/')[-1], "env": canonical_name.split('-')[1]})
+                                # Update progress bar and log condition
+                                cond_str = f"Model={model_name.split('/')[-1]}, Env={canonical_name.split('-')[1]}, Buf={buffer_size}, Hist={history_window}"
+                                pbar.set_postfix({"cond": cond_str})
+                                print(f"Running Condition: {cond_str}")
                                 
                                 env = MinigridTextWrapper(resolved_env_id)
                                 buffer_mgr = BufferManager(buffer_size=buffer_size)
@@ -513,9 +516,16 @@ def run_bot_experiments(model_names, environments, n_episodes_list, max_steps_li
                                 frames.append(pd.DataFrame(results))
                                 pbar.update(1)
                             except Exception as e:
-                                print(f"Error: {e}")
+                                print(f"Error in condition: {e}")
                                 errors.append({"model": model_name, "env": canonical_name, "error": str(e)})
                                 pbar.update(1)
+        
+        # GPU Memory Management: Clear cache between model switches
+        if not mock and torch.cuda.is_available():
+            print(f"Clearing GPU cache after model: {model_name}")
+            del llm_client
+            torch.cuda.empty_cache()
+            
     pbar.close()
                                 
     all_results = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
@@ -568,112 +578,7 @@ def save_run_outputs(all_results, action_logs, run_errors, output_root, run_tag,
     return {"run_dir": str(run_dir)}
 
 
-# %%
-if "all_results" not in dir() or all_results.empty:
-    print("No experiment results available to visualize.")
-else:
-    df = all_results.copy()
-    env_short = df["env"].str.replace("MiniGrid-", "").str.replace("-v0", "")
-    df["env_short"] = env_short
-
-    fig, axes = plt.subplots(2, 3, figsize=(22, 12))
-
-    # ── Plot 1: Model Comparison (top-left) ──
-    model_env = df.groupby(["env_short", "model"])["success"].mean().unstack(fill_value=0)
-    model_env.plot(kind="bar", ax=axes[0, 0], colormap="Set2")
-    axes[0, 0].set_title("Success Rate: 3B vs 7B", fontweight="bold")
-    axes[0, 0].set_ylabel("Success Rate")
-    axes[0, 0].set_xlabel("")
-    axes[0, 0].set_ylim(0, 1)
-    axes[0, 0].tick_params(axis='x', rotation=30)
-    axes[0, 0].legend(title='Model', fontsize=8)
-
-    # ── Plot 2: Buffer Size Effect (top-center) ──
-    buf_env = df.groupby(["env_short", "buffer_size"])["success"].mean().unstack(fill_value=0)
-    buf_env.columns = [f"buf={int(c)}" for c in buf_env.columns]
-    buf_env.plot(kind="bar", ax=axes[0, 1], colormap="Paired")
-    axes[0, 1].set_title("Success Rate: Buffer Size 2 vs 5", fontweight="bold")
-    axes[0, 1].set_ylabel("Success Rate")
-    axes[0, 1].set_xlabel("")
-    axes[0, 1].set_ylim(0, 1)
-    axes[0, 1].tick_params(axis='x', rotation=30)
-    axes[0, 1].legend(title='Templates', fontsize=8)
-
-    # ── Plot 3: History Window Effect (top-right) ──
-    hw_env = df.groupby(["history_window", "env_short"])["success"].mean().unstack(fill_value=0)
-    hw_env.plot(kind="line", marker="o", ax=axes[0, 2], linewidth=2)
-    axes[0, 2].set_title("Success Rate vs History Window", fontweight="bold")
-    axes[0, 2].set_xlabel("History Window")
-    axes[0, 2].set_ylabel("Success Rate")
-    axes[0, 2].set_ylim(0, 1)
-    axes[0, 2].set_xticks(sorted(df['history_window'].unique()))
-    axes[0, 2].legend(title='Env', fontsize=7)
-
-    # ── Plot 4: Config Heatmap (bottom-left) ──
-    df["config"] = (
-        df["model"].str.split("/").str[-1].str.replace("Qwen2.5-", "") + "\n"
-        + "buf=" + df["buffer_size"].astype(str)
-        + " k=" + df["history_window"].astype(str)
-    )
-    heat_data = df.groupby(["env_short", "config"])["success"].mean().unstack(fill_value=0)
-    sns.heatmap(
-        heat_data,
-        annot=True,
-        fmt=".2f",
-        cmap="YlGn",
-        vmin=0,
-        vmax=1,
-        ax=axes[1, 0],
-        cbar_kws={'label': 'Success Rate'},
-    )
-    axes[1, 0].set_title("Success Rate Heatmap (all configs)", fontweight="bold")
-    axes[1, 0].set_ylabel("Environment")
-    axes[1, 0].set_xlabel("Config")
-    axes[1, 0].tick_params(axis='x', rotation=45, labelsize=7)
-    axes[1, 0].tick_params(axis='y', rotation=0)
-
-    # ── Plot 5: Steps Distribution (bottom-center) ──
-    model_short = df["model"].str.split("/").str[-1]
-    sns.boxplot(
-        data=df.assign(model_short=model_short),
-        x="env_short",
-        y="steps",
-        hue="model_short",
-        ax=axes[1, 1],
-        palette="Set2",
-    )
-    axes[1, 1].set_title("Steps Distribution by Env & Model", fontweight="bold")
-    axes[1, 1].set_xlabel("")
-    axes[1, 1].set_ylabel("Steps")
-    axes[1, 1].tick_params(axis='x', rotation=30)
-    axes[1, 1].legend(title='Model', fontsize=8)
-
-    # ── Plot 6: Reward by Config (bottom-right) ──
-    reward_data = df.groupby(["env_short", "buffer_size"])["reward"].mean().unstack(fill_value=0)
-    reward_data.columns = [f"buf={int(c)}" for c in reward_data.columns]
-    reward_data.plot(kind="bar", ax=axes[1, 2], colormap="coolwarm")
-    axes[1, 2].set_title("Average Reward by Env & Buffer Size", fontweight="bold")
-    axes[1, 2].set_ylabel("Reward")
-    axes[1, 2].set_xlabel("")
-    axes[1, 2].tick_params(axis='x', rotation=30)
-    axes[1, 2].legend(title='Templates', fontsize=8)
-
-    plt.tight_layout()
-
-    artifacts = globals().get("run_artifacts")
-    if artifacts:
-        out_path = Path(artifacts["run_dir"]) / "overview.png"
-        fig.savefig(out_path, dpi=150, bbox_inches='tight')
-        print(f"Saved plot to: {out_path}")
-
-    plt.show()
-
-    # ── Summary Table ──
-    print("\nDetailed Summary:")
-    summary = df.groupby(["model", "env", "buffer_size", "history_window"])[
-        ["success", "steps", "reward", "tokens", "time"]
-    ].mean()
-    print(summary)
+# Redundant plotting block removed for cleanup.
 
 
 # %%
