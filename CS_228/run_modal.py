@@ -20,6 +20,8 @@ image = (
         "matplotlib",
         "seaborn",
         "tqdm",
+        "vllm",
+        "openai",
     )
     .add_local_dir(".", remote_path="/root", ignore=["CS 228", "outputs", "run_log.log", "__pycache__", ".ipynb_checkpoints"])
 )

@@ -27,6 +27,8 @@ import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import seaborn as sns
 from tqdm import tqdm
+import subprocess
+from openai import OpenAI
 
 # Use non-interactive backend for Modal/Server
 import matplotlib
@@ -41,6 +43,8 @@ MODEL_CANDIDATES = [
 MAX_NEW_TOKENS = 16
 TEMPERATURE = 0.7
 MOCK_MODE = False
+USE_VLLM = True # Set to False for native HF transformers
+VLLM_PORT = 8000
 HISTORY_WINDOWS = (0, 1, 2)
 ENVIRONMENTS = [
     "MiniGrid-LavaGapS7-v0",
@@ -258,19 +262,84 @@ class MinigridTextWrapper:
 
 
 # %%
+class VLLMServer:
+    def __init__(self, model_name, port=8000):
+        self.model_name = model_name
+        self.port = port
+        self.process = None
+
+    def start(self):
+        print(f"🚀 Starting vLLM server for model: {self.model_name} on port {self.port}...")
+        command = [
+            "python", "-m", "vllm.entrypoints.openai.api_server",
+            "--model", self.model_name,
+            "--port", str(self.port),
+            "--gpu-memory-utilization", "0.8", # Leave some room for other things
+            "--disable-log-requests"
+        ]
+        self.process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+        
+        # Wait for server to be ready
+        import requests
+        url = f"http://localhost:{self.port}/v1/models"
+        max_retries = 40
+        for i in range(max_retries):
+            try:
+                response = requests.get(url)
+                if response.status_code == 200:
+                    print("✅ vLLM server is ready!")
+                    return True
+            except:
+                pass
+            if i % 5 == 0:
+                print(f"Waiting for vLLM server... ({i}/{max_retries})")
+            time.sleep(10)
+        
+        print("❌ vLLM server failed to start.")
+        self.stop()
+        return False
+
+    def stop(self):
+        if self.process:
+            print(f"Stopping vLLM server for {self.model_name}...")
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+            self.process = None
+            # Allow GPU memory to clear
+            time.sleep(5)
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+
+# %%
 class LLMClient:
-    def __init__(self, model_name="Qwen/Qwen2.5-3B-Instruct", max_new_tokens=16, temperature=0.0, mock=False):
+    def __init__(self, model_name="Qwen/Qwen2.5-3B-Instruct", max_new_tokens=16, temperature=0.0, mock=False, use_vllm=False):
         self.model_name = model_name
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
         self.mock = mock
+        self.use_vllm = use_vllm
         self.total_tokens = 0
         self.total_latency = 0
         self.model = None
         self.tokenizer = None
+        self.client = None
 
         if not self.mock:
-            self._load_hf_model()
+            if self.use_vllm:
+                self._init_vllm_client()
+            else:
+                self._load_hf_model()
+
+    def _init_vllm_client(self):
+        self.client = OpenAI(
+            base_url=f"http://localhost:{VLLM_PORT}/v1",
+            api_key="empty"
+        )
+        print(f"vLLM client initialized for port {VLLM_PORT}")
 
     def _load_hf_model(self):
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, trust_remote_code=True)
@@ -289,42 +358,62 @@ class LLMClient:
         if self.mock:
             response = self._mock_logic(user_prompt)
             tokens = len(system_prompt + user_prompt) // 4
+        elif self.use_vllm:
+            response, tokens = self._query_vllm(system_prompt, user_prompt)
         else:
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ]
-            prompt = self.tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-                add_generation_prompt=True,
-            )
-
-            inputs = self.tokenizer(prompt, return_tensors="pt")
-            inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
-            input_tokens = inputs["input_ids"].shape[-1]
-
-            gen_kwargs = {
-                "max_new_tokens": self.max_new_tokens,
-                "do_sample": self.temperature > 0,
-                "pad_token_id": self.tokenizer.eos_token_id,
-            }
-            if self.temperature > 0:
-                gen_kwargs["temperature"] = self.temperature
-                gen_kwargs["top_p"] = 0.9
-
-            with torch.no_grad():
-                outputs = self.model.generate(**inputs, **gen_kwargs)
-
-            generated = outputs[0][input_tokens:]
-            response = self.tokenizer.decode(generated, skip_special_tokens=True).strip()
-            tokens = int(generated.shape[-1])
+            response, tokens = self._query_hf(system_prompt, user_prompt)
 
         latency = time.time() - start_time
         self.total_tokens += tokens
         self.total_latency += latency
 
         return response, tokens, latency
+
+    def _query_vllm(self, system_prompt, user_prompt):
+        response = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=self.temperature,
+            max_tokens=self.max_new_tokens,
+        )
+        text = response.choices[0].message.content.strip()
+        tokens = response.usage.completion_tokens
+        return text, tokens
+
+    def _query_hf(self, system_prompt, user_prompt):
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        prompt = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+
+        inputs = self.tokenizer(prompt, return_tensors="pt")
+        inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+        input_tokens = inputs["input_ids"].shape[-1]
+
+        gen_kwargs = {
+            "max_new_tokens": self.max_new_tokens,
+            "do_sample": self.temperature > 0,
+            "pad_token_id": self.tokenizer.eos_token_id,
+        }
+        if self.temperature > 0:
+            gen_kwargs["temperature"] = self.temperature
+            gen_kwargs["top_p"] = 0.9
+
+        with torch.no_grad():
+            outputs = self.model.generate(**inputs, **gen_kwargs)
+
+        generated = outputs[0][input_tokens:]
+        response = self.tokenizer.decode(generated, skip_special_tokens=True).strip()
+        tokens = int(generated.shape[-1])
+        return response, tokens
 
     @staticmethod
     def _extract_state_from_prompt(prompt):
@@ -480,7 +569,14 @@ def run_bot_experiments(model_names, environments, n_episodes_list, max_steps_li
     pbar = tqdm(total=total_conditions, desc="Overall Progress")
     
     for model_name in model_names:
-        llm_client = LLMClient(model_name=model_name, max_new_tokens=max_new_tokens, temperature=temperature, mock=mock)
+        vllm_server = None
+        if not mock and USE_VLLM:
+            vllm_server = VLLMServer(model_name, port=VLLM_PORT)
+            if not vllm_server.start():
+                print(f"Skipping model {model_name} due to vLLM failure.")
+                continue
+
+        llm_client = LLMClient(model_name=model_name, max_new_tokens=max_new_tokens, temperature=temperature, mock=mock, use_vllm=USE_VLLM)
         print(f"\n--- Starting Model: {model_name} ---")
         for canonical_name, resolved_env_id in resolved_envs:
             for n_episodes in n_episodes_list:
@@ -521,10 +617,13 @@ def run_bot_experiments(model_names, environments, n_episodes_list, max_steps_li
                                 pbar.update(1)
         
         # GPU Memory Management: Clear cache between model switches
-        if not mock and torch.cuda.is_available():
-            print(f"Clearing GPU cache after model: {model_name}")
-            del llm_client
-            torch.cuda.empty_cache()
+        if not mock:
+            if USE_VLLM and vllm_server:
+                vllm_server.stop()
+            elif torch.cuda.is_available():
+                print(f"Clearing GPU cache after model: {model_name}")
+                del llm_client
+                torch.cuda.empty_cache()
             
     pbar.close()
                                 
