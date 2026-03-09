@@ -558,7 +558,7 @@ class BoTAgent:
         self.history_window = history_window
         self.memory = []
         self.action_log = []
-        self.used_templates = set()
+        self.used_templates = []
 
     @staticmethod
     def _parse_action(response_text):
@@ -581,7 +581,7 @@ class BoTAgent:
         distilled = ProblemDistiller.distill(observation)
         template = self.buffer_manager.meta_buffer.retrieve(distilled)
         if template:
-            self.used_templates.add(template.name)
+            self.used_templates.append(template.name)
             aid = template.instantiate(distilled)
         else:
             aid = ""
@@ -651,7 +651,7 @@ def _run_single_episode(env, agent, max_steps, seed=None):
         
     return success, steps, total_reward
 
-def _build_episode_row(env_id, episode, model_name, success, steps, reward, buffer_size, history_window, tokens=0, latency=0.0):
+def _build_episode_row(env_id, episode, model_name, success, steps, reward, buffer_size, history_window, tokens=0, latency=0.0, most_used_template="None", learned_templates_count=0, total_templates=0):
     return {
         "env": env_id,
         "episode": episode,
@@ -663,6 +663,9 @@ def _build_episode_row(env_id, episode, model_name, success, steps, reward, buff
         "history_window": history_window,
         "tokens": tokens,
         "time": latency,
+        "most_used_template": most_used_template,
+        "learned_templates_count": learned_templates_count,
+        "total_templates": total_templates,
     }
 
 def run_bot_experiments(model_names, environments, n_episodes_list, max_steps_list, buffer_sizes=(2,), history_windows=(3,), mock=True, max_new_tokens=16, temperature=0.0, return_errors=False):
@@ -709,10 +712,21 @@ def run_bot_experiments(model_names, environments, n_episodes_list, max_steps_li
                                     ep_tok = llm_client.total_tokens - start_tok
                                     ep_lat = llm_client.total_latency - start_lat
                                     
-                                    results.append(_build_episode_row(canonical_name, i, model_name, success, steps, reward, buffer_size, history_window, tokens=ep_tok, latency=ep_lat))
+                                    most_used = "None"
+                                    if agent.used_templates:
+                                        most_used = max(set(agent.used_templates), key=agent.used_templates.count)
+                                        
+                                    learned_count = sum(1 for t in buffer_mgr.meta_buffer.templates if "Learned Strategy" in t)
+                                    total_count = len(buffer_mgr.meta_buffer.templates)
+                                    
+                                    results.append(_build_episode_row(
+                                        canonical_name, i, model_name, success, steps, reward, buffer_size, history_window, 
+                                        tokens=ep_tok, latency=ep_lat, most_used_template=most_used,
+                                        learned_templates_count=learned_count, total_templates=total_count
+                                    ))
                                     
                                     # Update dynamic buffer stats
-                                    for t_name in agent.used_templates:
+                                    for t_name in set(agent.used_templates):
                                         buffer_mgr.meta_buffer.update_stats(t_name, success)
                                         
                                     # Buffer Learning Step
