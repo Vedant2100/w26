@@ -110,18 +110,23 @@ class MetaBuffer:
     def add_template(self, template: ThoughtTemplate):
         self.templates[template.name] = template
 
-    def retrieve(self, problem_description: str) -> ThoughtTemplate:
-        desc = problem_description.lower()
-        if "Clear Path" in self.templates and ("box" in desc or "ball" in desc):
-            return self.templates["Clear Path"]
-        if "Object Acquisition" in self.templates and "key" in desc:
-            return self.templates["Object Acquisition"]
-        if "Unlock Door" in self.templates and "door" in desc:
-            return self.templates["Unlock Door"]
-        if "wall" in desc or "lava" in desc or "door" in desc:
-            if "Obstacle Avoidance" in self.templates:
-                return self.templates["Obstacle Avoidance"]
-        return self.templates["Direct Navigation"]
+    def retrieve(self, problem_description: str):
+        # Current logic: simple if/else for retrieval
+        if "lava" in problem_description.lower():
+            return self.templates.get("Obstacle Avoidance")
+        if "door" in problem_description.lower() or "key" in problem_description.lower():
+            return self.templates.get("Unlock Door")
+        if "pickup" in problem_description.lower() or "ball" in problem_description.lower():
+            return self.templates.get("Object Acquisition")
+        return self.templates.get("Direct Navigation")
+
+    def update_stats(self, template_name, success):
+        template = self.templates.get(template_name)
+        if template:
+            template.usage_count += 1
+            # Moving average for success rate
+            old_success = template.success_rate
+            template.success_rate = old_success + (float(success) - old_success) / template.usage_count
 
 class ProblemDistiller:
     @staticmethod
@@ -471,6 +476,7 @@ class BoTAgent:
         self.history_window = history_window
         self.memory = []
         self.action_log = []
+        self.used_templates = set()
 
     @staticmethod
     def _parse_action(response_text):
@@ -491,7 +497,12 @@ class BoTAgent:
 
     def act(self, observation):
         distilled = ProblemDistiller.distill(observation)
-        aid = self.buffer_manager.get_reasoning_aid(distilled)
+        template = self.buffer_manager.meta_buffer.retrieve(distilled)
+        if template:
+            self.used_templates.add(template.name)
+            aid = f"Thought Template: {template.name}\nReasoning Pattern: {template.reasoning_pattern}"
+        else:
+            aid = ""
 
         system_prompt = "You are a MiniGrid navigation agent. Choose exactly one action token: forward, turn_left, turn_right, toggle, pickup, drop."
         history_context = self.memory[-self.history_window:] if self.use_history else []
@@ -540,12 +551,23 @@ def _run_single_episode(env, agent, max_steps, seed=None):
     done = False
     steps = 0
     total_reward = 0.0
+    
+    goal_pos = env._find_goal_pos()
+    
     while not done and steps < max_steps:
         action = agent.act(obs)
         obs, reward, done, info = env.step(action)
         total_reward += reward
         steps += 1
-    return total_reward > 0, steps, total_reward
+        
+    # Robust success detection: coord check if goal exists
+    if goal_pos:
+        agent_pos = env._base_env().agent_pos
+        success = (int(agent_pos[0]) == goal_pos[0] and int(agent_pos[1]) == goal_pos[1])
+    else:
+        success = total_reward > 0
+        
+    return success, steps, total_reward
 
 def _build_episode_row(env_id, episode, model_name, success, steps, reward, buffer_size, history_window, tokens=0, latency=0.0):
     return {
@@ -606,6 +628,11 @@ def run_bot_experiments(model_names, environments, n_episodes_list, max_steps_li
                                     ep_lat = llm_client.total_latency - start_lat
                                     
                                     results.append(_build_episode_row(canonical_name, i, model_name, success, steps, reward, buffer_size, history_window, tokens=ep_tok, latency=ep_lat))
+                                    
+                                    # Update dynamic buffer stats
+                                    for t_name in agent.used_templates:
+                                        buffer_mgr.meta_buffer.update_stats(t_name, success)
+
                                     for entry in agent.action_log:
                                         entry.update({"model": model_name, "env": canonical_name, "episode": i, "buffer_size": buffer_size, "history_window": history_window})
                                     all_action_logs.extend(agent.action_log)
