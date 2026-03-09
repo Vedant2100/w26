@@ -70,6 +70,21 @@ class ThoughtTemplate:
     usage_count: int = 0
     success_rate: float = 0.0
 
+    def instantiate(self, distilled_obs: dict) -> str:
+        """Process the template with local facts into a concrete plan."""
+        context_parts = []
+        if distilled_obs.get("agent_pos"):
+            context_parts.append(f"You are at {distilled_obs['agent_pos']} facing {distilled_obs.get('facing', 'unknown')}.")
+        if distilled_obs.get("target_pos"):
+            context_parts.append(f"Target is at {distilled_obs['target_pos']}.")
+        
+        nearby = distilled_obs.get("nearby_objects", [])
+        if nearby:
+            context_parts.append(f"Nearby objects: {', '.join(nearby)}.")
+            
+        context_str = " ".join(context_parts)
+        return f"[TEMPLATE: {self.name}]\nContext: {context_str}\nPattern: {self.reasoning_pattern}"
+
 ALL_TEMPLATES = [
     ThoughtTemplate(
         name="Direct Navigation",
@@ -110,12 +125,15 @@ class MetaBuffer:
     def add_template(self, template: ThoughtTemplate):
         self.templates[template.name] = template
 
-    def retrieve(self, problem_description: str):
-        # Current logic: simple if/else for retrieval
-        if "lava" in problem_description.lower():
+    def retrieve(self, problem_description: dict):
+        desc = str(problem_description).lower()
+        if "lava" in desc:
             return self.templates.get("Obstacle Avoidance")
-        if "door" in problem_description.lower() or "key" in problem_description.lower():
+        if "door" in desc or "key" in desc:
             return self.templates.get("Unlock Door")
+        if "pickup" in desc or "ball" in desc:
+            return self.templates.get("Object Acquisition")
+        return self.templates.get("Direct Navigation")
         if "pickup" in problem_description.lower() or "ball" in problem_description.lower():
             return self.templates.get("Object Acquisition")
         return self.templates.get("Direct Navigation")
@@ -128,19 +146,72 @@ class MetaBuffer:
             old_success = template.success_rate
             template.success_rate = old_success + (float(success) - old_success) / template.usage_count
 
+    def learn(self, action_log: list, llm_client) -> bool:
+        """Replace a consistently failing template with a new learned strategy."""
+        failing_template = None
+        for t_name, t in self.templates.items():
+            if t.usage_count >= 3 and t.success_rate < 0.2:
+                failing_template = t_name
+                break
+                
+        if not failing_template:
+            return False # Nothing needs replacing
+            
+        # Distill successful trajectory
+        trajectory = " -> ".join([entry["parsed_action"] for entry in action_log])
+        system_prompt = "You are a MiniGrid expert. Summarize the following successful action sequence into a 3-4 step generic reasoning pattern."
+        user_prompt = f"Sequence: {trajectory}\nProvide ONLY the numbered reasoning steps."
+        
+        response, _, _ = llm_client.query(system_prompt, user_prompt)
+        
+        new_name = f"Learned Strategy {len(self.templates)+1}"
+        new_template = ThoughtTemplate(
+            name=new_name,
+            description="Dynamically learned from successful episode.",
+            reasoning_pattern=response.strip()
+        )
+        
+        # Replace
+        del self.templates[failing_template]
+        self.add_template(new_template)
+        print(f"\n🧠 [Buffer Learning] Replaced {failing_template} with new learned strategy: {new_name}")
+        return True
+
+import re
 class ProblemDistiller:
     @staticmethod
-    def distill(obs_text: str) -> str:
-        return obs_text
+    def distill(obs_text: str) -> dict:
+        """Parse raw text observation into a structured dictionary."""
+        distilled = {
+            "agent_pos": None,
+            "facing": None,
+            "target_pos": None,
+            "nearby_objects": []
+        }
+        
+        # Extract agent pos
+        agent_match = re.search(r"Agent is at \[(\d+),\s*(\d+)\] facing (\w+)", obs_text)
+        if agent_match:
+            distilled["agent_pos"] = [int(agent_match.group(1)), int(agent_match.group(2))]
+            distilled["facing"] = agent_match.group(3)
+            
+        # Extract target pos
+        target_match = re.search(r"is at \[(\d+),\s*(\d+)\]", obs_text)
+        if target_match:
+            distilled["target_pos"] = [int(target_match.group(1)), int(target_match.group(2))]
+            
+        # Extract nearby objects
+        nearby_match = re.search(r"Nearby objects:\s*(.*?)\.", obs_text)
+        if nearby_match:
+            distilled["nearby_objects"] = [o.strip() for o in nearby_match.group(1).split(",")]
+            
+        return distilled
 
 class BufferManager:
     def __init__(self, buffer_size=2):
         self.meta_buffer = MetaBuffer(buffer_size=buffer_size)
         self.thought_history = deque(maxlen=50)
 
-    def get_reasoning_aid(self, distilled_problem: str) -> str:
-        template = self.meta_buffer.retrieve(distilled_problem)
-        return f"[TEMPLATE: {template.name}]\n{template.reasoning_pattern}"
 
 
 # %%
@@ -500,7 +571,7 @@ class BoTAgent:
         template = self.buffer_manager.meta_buffer.retrieve(distilled)
         if template:
             self.used_templates.add(template.name)
-            aid = f"Thought Template: {template.name}\nReasoning Pattern: {template.reasoning_pattern}"
+            aid = template.instantiate(distilled)
         else:
             aid = ""
 
@@ -632,6 +703,10 @@ def run_bot_experiments(model_names, environments, n_episodes_list, max_steps_li
                                     # Update dynamic buffer stats
                                     for t_name in agent.used_templates:
                                         buffer_mgr.meta_buffer.update_stats(t_name, success)
+                                        
+                                    # Buffer Learning Step
+                                    if success and not mock:
+                                        buffer_mgr.meta_buffer.learn(agent.action_log, llm_client)
 
                                     for entry in agent.action_log:
                                         entry.update({"model": model_name, "env": canonical_name, "episode": i, "buffer_size": buffer_size, "history_window": history_window})
