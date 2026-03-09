@@ -162,6 +162,10 @@ DOWNLOAD_SUBMISSIONS = (
     or download_submissions_config
 )
 
+# Internal git commit/push is disabled by default because the GitHub workflow
+# already handles commit/push in a dedicated step.
+INTERNAL_GIT_COMMIT = os.getenv("INTERNAL_GIT_COMMIT", "false").lower() == "true"
+
 downloaded_file_urls = set()
 
 
@@ -318,6 +322,9 @@ def download_canvas_file_by_id(file_id, course_folder):
 
 def extract_and_download_linked_files(html, course_folder):
     """Extract file IDs from HTML and download the associated files."""
+    if not html:
+        return
+
     soup = BeautifulSoup(html, "html.parser")
 
     for tag in soup.find_all(["a", "iframe"], href=True) + soup.find_all(
@@ -407,7 +414,8 @@ def main():
             f"{BASE_API_URL}/courses/{course_id}/assignments?per_page=100"
         ):
             try:
-                description_html = assignment.get("description", "")
+                # Canvas often returns description as null for file-only assignments.
+                description_html = assignment.get("description") or ""
                 name = f"assignment - {assignment['name']}"
                 extract_and_download_linked_files(description_html, course_folder)
                 html = f"<h1>{assignment['name']}</h1><p>{description_html}</p>"
@@ -520,10 +528,10 @@ def main():
 
     print(f"\n✅ All course content downloaded to {DOWNLOADS_BASE}")
 
-    # If running in GitHub Actions, commit and push
-    # If running in GitHub Actions and AUTO_COMMIT is enabled, commit and push
+    # Optional internal commit/push path. Disabled by default.
     if (
         os.getenv("GITHUB_WORKSPACE")
+        and INTERNAL_GIT_COMMIT
         and os.getenv("AUTO_COMMIT", "false").lower() == "true"
     ):
         commit_and_push()
@@ -550,9 +558,10 @@ def commit_and_push():
             print("ℹ️  No changes to commit.")
             return
 
-        # Add all files in canvas_all_content
+        # Add configured output directory relative to repository root.
+        output_dir = os.path.basename(os.path.normpath(DOWNLOADS_BASE))
         print("\n📝 Committing downloaded files...")
-        subprocess.run(["git", "add", "canvas_all_content/"], cwd=repo_dir, check=True)
+        subprocess.run(["git", "add", "--", output_dir], cwd=repo_dir, check=True)
 
         # Create commit message with timestamp
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
