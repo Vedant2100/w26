@@ -12,21 +12,31 @@ EPISODES_PATH = BASE_DIR / "episodes.csv"
 ACTIONS_PATH = BASE_DIR / "actions.csv"
 
 # Set up argument parsing
-parser = argparse.ArgumentParser(description="Replay successful episodes.")
+parser = argparse.ArgumentParser(description="Replay episodes.")
 parser.add_argument("--env-type", type=str, choices=["lava", "doorkey", "empty"], 
-                    help="Filter by environment type (lava, doorkey, empty)")
+                    help="Filter by environment type")
+parser.add_argument("--model", type=str, choices=["3B", "7B"], 
+                    help="Filter by model size (3B or 7B)")
+parser.add_argument("--failure", action="store_true", 
+                    help="Replay failures instead of successes")
 args = parser.parse_args()
 
 # Load data
 df_episodes = pd.read_csv(EPISODES_PATH)
 df_actions = pd.read_csv(ACTIONS_PATH)
 
-# Filter for successful episodes
-successes = df_episodes[df_episodes['success'] == True].copy()
+# Filter for success or failure
+target_status = not args.failure
+episodes_to_replay = df_episodes[df_episodes['success'] == target_status].copy()
 
-# Apply environment type filter if provided
+# Apply environment type filter
 if args.env_type:
-    successes = successes[successes['env'].str.contains(args.env_type, case=False)]
+    episodes_to_replay = episodes_to_replay[episodes_to_replay['env'].str.contains(args.env_type, case=False)]
+
+# Apply model filter
+if args.model:
+    episodes_to_replay = episodes_to_replay[episodes_to_replay['model'].str.contains(args.model)]
+
 
 
 # Action mapping for MiniGrid (parsing internal strings back to ints)
@@ -80,10 +90,12 @@ def replay_episode(row):
             
     env.close()
 
-# Iterate through all successes and play them
-if successes.empty:
-    print("No successful episodes found to replay.")
+# Iterate through all filtered episodes and play them
+if episodes_to_replay.empty:
+    print("No matching episodes found to replay.")
 else:
-    print(f"Found {len(successes)} successful episodes. Starting gallery replay...")
-    for _, row in successes.iterrows():
+    status_str = "FAILURE" if args.failure else "SUCCESS"
+    print(f"Found {len(episodes_to_replay)} {status_str} episodes. Starting gallery replay...")
+    for _, row in episodes_to_replay.iterrows():
         replay_episode(row)
+
