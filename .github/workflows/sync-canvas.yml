@@ -81,12 +81,14 @@ jobs:
           PY
           echo "Files under repo root:"
           ls -la
-          echo "Files under canvas_all_content (if exists):"
-          ls -la canvas_all_content || echo "No canvas_all_content directory"
+          echo "Files under output directory:"
+          OUTPUT_DIR=$(python -c "import json; print(json.load(open('config.json'))['output']['base_directory'])")
+          ls -la "$OUTPUT_DIR" || echo "No output directory found"
 
       - name: Extract Zip Files
         run: |
-          find canvas_all_content -type f -name "*.zip" | while read -r zip_file; do
+          OUTPUT_DIR=$(python -c "import json; print(json.load(open('config.json'))['output']['base_directory'])")
+          find "$OUTPUT_DIR" -type f -name "*.zip" | while read -r zip_file; do
             echo "Extracting $zip_file..."
             # Extract to the same directory as the zip file
             unzip -o "$zip_file" -d "$(dirname "$zip_file")"
