@@ -77,6 +77,10 @@ class ThoughtTemplate:
             context_parts.append(f"You are at {distilled_obs['agent_pos']} facing {distilled_obs.get('facing', 'unknown')}.")
         if distilled_obs.get("target_pos"):
             context_parts.append(f"Target is at {distilled_obs['target_pos']}.")
+            
+        front = distilled_obs.get("front_object")
+        if front:
+            context_parts.append(f"Right in front of you is a {front}.")
         
         nearby = distilled_obs.get("nearby_objects", [])
         if nearby:
@@ -186,6 +190,7 @@ class ProblemDistiller:
             "agent_pos": None,
             "facing": None,
             "target_pos": None,
+            "front_object": None,
             "nearby_objects": []
         }
         
@@ -196,14 +201,20 @@ class ProblemDistiller:
             distilled["facing"] = agent_match.group(3)
             
         # Extract target pos
-        target_match = re.search(r"is at \[(\d+),\s*(\d+)\]", obs_text)
+        target_match = re.search(r"(?:Goal|Target).*?is at \[(\d+),\s*(\d+)\]", obs_text)
         if target_match:
             distilled["target_pos"] = [int(target_match.group(1)), int(target_match.group(2))]
+            
+        # Extract front object
+        front_match = re.search(r"In front of you is a (.*?)\.", obs_text)
+        if front_match:
+            distilled["front_object"] = front_match.group(1).strip()
             
         # Extract nearby objects
         nearby_match = re.search(r"Nearby objects:\s*(.*?)\.", obs_text)
         if nearby_match:
-            distilled["nearby_objects"] = [o.strip() for o in nearby_match.group(1).split(",")]
+            objects = re.findall(r"([^,]+? at \[\d+,\s*\d+\])", nearby_match.group(1))
+            distilled["nearby_objects"] = [o.strip() for o in objects]
             
         return distilled
 
