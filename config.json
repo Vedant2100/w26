@@ -5,7 +5,7 @@
     "auto_commit": true,
     "auto_push": true,
     "target_branch": "course",
-    "download_submissions": false
+    "download_submissions": true
   },
   "courses": {
     "include_all": false,
