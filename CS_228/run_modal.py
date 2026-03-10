@@ -24,6 +24,9 @@ image = (
         "openai",
         "requests",
         "sentencepiece",
+        "jupyter",
+        "nbconvert",
+        "imageio"
     )
     .add_local_dir(".", remote_path="/root", ignore=["CS 228", "outputs", "run_log.log", "__pycache__", ".ipynb_checkpoints"])
 )
@@ -42,6 +45,10 @@ volume = modal.Volume.from_name("cs228-vol", create_if_missing=True)
 )
 def run_experiment_on_modal():
     import subprocess
+    import os
+    from pathlib import Path
+    from datetime import datetime, timezone
+    import shutil
     
     print("🚀 Starting Modal Experiment Run at:", datetime.now(timezone.utc).isoformat())
     
@@ -49,8 +56,7 @@ def run_experiment_on_modal():
     os.environ["HF_HOME"] = "/data/hf_cache"
     os.environ["TRANSFORMERS_CACHE"] = "/data/hf_cache"
     
-    # The script saves to "CS 228/outputs"
-    # We want "CS 228" to be a symlink to "/data/CS 228"
+    # Symlink persistent volume for results
     vol_output_path = Path("/data/CS 228")
     vol_output_path.mkdir(parents=True, exist_ok=True)
     
@@ -60,15 +66,29 @@ def run_experiment_on_modal():
             local_output_path.unlink()
         else:
             shutil.rmtree(local_output_path)
-            
+    
     os.symlink(vol_output_path, local_output_path)
     print(f"✅ Linked {local_output_path} -> {vol_output_path}")
 
-    # Execute the Python script
-    script_name = "bot_exploration.py"
-    print(f"🐍 Executing {script_name}...")
+    # Notebook name
+    notebook_name = "Vedant_Borkute_DL_Project_BoT_Implementation.ipynb"
+    script_name = "nb_run.py"
     
+    print(f"📓 Converting {notebook_name} to script...")
     try:
+        subprocess.run(["jupyter", "nbconvert", "--to", "script", notebook_name, "--output", "nb_run"], check=True, cwd="/root")
+        
+        # Patch the script to save gifs into the persistent volume folder
+        with open(f"/root/{script_name}", "r") as f:
+            content = f.read()
+        
+        # Redirect outputs to the symlinked CS 228 folder so they persist
+        content = content.replace('gif_folder="episode_gifs"', 'gif_folder="CS 228/episode_gifs"')
+        
+        with open(f"/root/{script_name}", "w") as f:
+            f.write(content)
+            
+        print(f"🐍 Executing converted script {script_name}...")
         subprocess.run(["python", script_name], check=True, cwd="/root")
         print("✨ Experiment execution successful!")
     except subprocess.CalledProcessError as e:
