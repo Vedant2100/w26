@@ -29,6 +29,8 @@ import seaborn as sns
 from tqdm import tqdm
 import subprocess
 from openai import OpenAI
+import requests
+import re
 
 # Use non-interactive backend for Modal/Server
 import matplotlib
@@ -202,7 +204,6 @@ class MetaBuffer:
         print(f"\n🧠 [Buffer Learning] Replaced {failing_template} with new learned strategy: {new_name}")
         return True
 
-import re
 class ProblemDistiller:
     @staticmethod
     def distill(obs_text: str) -> dict:
@@ -394,7 +395,6 @@ class VLLMServer:
         self.process = subprocess.Popen(command, stdout=self.log_file, stderr=subprocess.STDOUT)
         
         # Wait for server to be ready
-        import requests
         url = f"http://127.0.0.1:{self.port}/v1/models"
         max_retries = 60 # Increased to 10 mins
         for i in range(max_retries):
