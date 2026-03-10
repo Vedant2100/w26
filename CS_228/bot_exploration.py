@@ -41,20 +41,20 @@ MODEL_CANDIDATES = [
     "Qwen/Qwen2.5-7B-Instruct",
 ]
 MAX_NEW_TOKENS = 16
-TEMPERATURE = 0.7
+TEMPERATURE = 0.1
 MOCK_MODE = False
 USE_VLLM = True # Set to False for native HF transformers
 VLLM_PORT = 8000
 HISTORY_WINDOWS = (0, 1, 2)
 ENVIRONMENTS = [
     "MiniGrid-LavaGapS7-v0",
-    "MiniGrid-BlockedUnlockPickup-v0",
-    "MiniGrid-DoorKey-5x5-v0",
+    # "MiniGrid-BlockedUnlockPickup-v0",
+    # "MiniGrid-DoorKey-5x5-v0",
     "MiniGrid-Empty-8x8-v0",
 ]
 N_EPISODES_LIST = (10,)
 MAX_STEPS_LIST = (100,)
-BUFFER_SIZES = (2, 3)
+BUFFER_SIZES = (2, 3, 5)
 OUTPUT_ROOT = "CS 228/outputs"
 RUN_TAG = "bot_sweep"
 
@@ -118,8 +118,10 @@ ALL_TEMPLATES = [
 ]
 
 class MetaBuffer:
-    def __init__(self, buffer_size=2):
-        self.templates = {}
+    def __init__(self, buffer_size=4):
+        self.buffer_size = buffer_size
+        self.templates = {}  # name -> ThoughtTemplate
+        self._learn_counter = 0
         self._initialize_templates(buffer_size)
 
     def _initialize_templates(self, buffer_size):
@@ -131,16 +133,35 @@ class MetaBuffer:
 
     def retrieve(self, problem_description: dict):
         desc = str(problem_description).lower()
-        if "lava" in desc:
-            return self.templates.get("Obstacle Avoidance")
-        if "door" in desc or "key" in desc:
-            return self.templates.get("Unlock Door")
-        if "pickup" in desc or "ball" in desc:
-            return self.templates.get("Object Acquisition")
-        return self.templates.get("Direct Navigation")
-        if "pickup" in problem_description.lower() or "ball" in problem_description.lower():
-            return self.templates.get("Object Acquisition")
-        return self.templates.get("Direct Navigation")
+        if not self.templates:
+            return None
+            
+        best_template = None
+        max_score = -1.0
+        
+        for t_name, template in self.templates.items():
+            # If a template has never been used, pretend it has a 0.5 success rate
+            # so it isn't completely ignored against slightly failing templates
+            base_score = template.success_rate if template.usage_count > 0 else 0.5
+            
+            # Keyword Bonus matches original heuristic checks
+            keyword_bonus = 0.0
+            if "Obstacle Avoidance" in t_name and "lava" in desc:
+                keyword_bonus = 1.0
+            elif "Unlock Door" in t_name and ("door" in desc or "key" in desc):
+                keyword_bonus = 1.0
+            elif "Object Acquisition" in t_name and ("pickup" in desc or "ball" in desc):
+                keyword_bonus = 1.0
+            elif "Direct Navigation" in t_name and not any(k in desc for k in ["lava", "door", "key", "pickup", "ball"]):
+                keyword_bonus = 1.0
+                
+            score = base_score + keyword_bonus
+            
+            if score > max_score:
+                max_score = score
+                best_template = template
+                
+        return best_template
 
     def update_stats(self, template_name, success):
         template = self.templates.get(template_name)
@@ -162,13 +183,14 @@ class MetaBuffer:
             return False # Nothing needs replacing
             
         # Distill successful trajectory
-        trajectory = " -> ".join([entry["parsed_action"] for entry in action_log])
+        trajectory = "\n".join([f"{entry['observation']} -> {entry['parsed_action']}" for entry in action_log])
         system_prompt = "You are a MiniGrid expert. Summarize the following successful action sequence into a 3-4 step generic reasoning pattern."
-        user_prompt = f"Sequence: {trajectory}\nProvide ONLY the numbered reasoning steps."
+        user_prompt = f"Sequence:\n{trajectory}\n\nProvide ONLY the numbered reasoning steps."
         
         response, _, _ = llm_client.query(system_prompt, user_prompt)
         
-        new_name = f"Learned Strategy {len(self.templates)+1}"
+        self._learn_counter += 1
+        new_name = f"Learned Strategy {self._learn_counter}"
         new_template = ThoughtTemplate(
             name=new_name,
             description="Dynamically learned from successful episode.",
@@ -642,13 +664,14 @@ def _run_single_episode(env, agent, max_steps, seed=None):
         total_reward += reward
         steps += 1
         
-    # Robust success detection: coord check if goal exists
+    # Robust success detection: coord OR reward
+    is_on_goal = False
     if goal_pos:
         agent_pos = env._base_env().agent_pos
-        success = (int(agent_pos[0]) == goal_pos[0] and int(agent_pos[1]) == goal_pos[1])
-    else:
-        success = total_reward > 0
+        is_on_goal = (int(agent_pos[0]) == goal_pos[0] and int(agent_pos[1]) == goal_pos[1])
         
+    success = (total_reward > 0) or is_on_goal
+    
     return success, steps, total_reward
 
 def _build_episode_row(env_id, episode, model_name, success, steps, reward, buffer_size, history_window, tokens=0, latency=0.0, most_used_template="None", learned_templates_count=0, total_templates=0):
@@ -729,8 +752,8 @@ def run_bot_experiments(model_names, environments, n_episodes_list, max_steps_li
                                     for t_name in set(agent.used_templates):
                                         buffer_mgr.meta_buffer.update_stats(t_name, success)
                                         
-                                    # Buffer Learning Step
-                                    if success and not mock:
+                                    # Buffer Learning Step: Only learn from efficient trajectories
+                                    if success and not mock and steps < (max_steps * 0.5):
                                         buffer_mgr.meta_buffer.learn(agent.action_log, llm_client)
 
                                     for entry in agent.action_log:
