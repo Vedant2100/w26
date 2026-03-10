@@ -47,10 +47,9 @@ USE_VLLM = True # Set to False for native HF transformers
 VLLM_PORT = 8000
 HISTORY_WINDOWS = (0, 1, 2)
 ENVIRONMENTS = [
-    "MiniGrid-LavaGapS7-v0",
-    # "MiniGrid-BlockedUnlockPickup-v0",
-    # "MiniGrid-DoorKey-5x5-v0",
     "MiniGrid-Empty-8x8-v0",
+    "MiniGrid-LavaGapS6-v0",
+    "MiniGrid-LavaCrossingS9N2-v0",
 ]
 N_EPISODES_LIST = (10,)
 MAX_STEPS_LIST = (100,)
@@ -379,32 +378,38 @@ class VLLMServer:
 
     def start(self):
         print(f"🚀 Starting vLLM server for model: {self.model_name} on port {self.port}...")
+        
+        # Log vLLM output to a file for debugging (on persistent volume)
+        log_dir = Path("CS 228/vllm_logs")
+        log_dir.mkdir(exist_ok=True, parents=True)
+        self.log_file = open(log_dir / f"vllm_{self.model_name.replace('/', '_')}.log", "w")
+        
         command = [
             "python", "-m", "vllm.entrypoints.openai.api_server",
             "--model", self.model_name,
             "--port", str(self.port),
-            "--gpu-memory-utilization", "0.8", # Leave some room for other things
+            "--gpu-memory-utilization", "0.8",
             "--disable-log-requests"
         ]
-        self.process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+        self.process = subprocess.Popen(command, stdout=self.log_file, stderr=subprocess.STDOUT)
         
         # Wait for server to be ready
         import requests
-        url = f"http://localhost:{self.port}/v1/models"
-        max_retries = 40
+        url = f"http://127.0.0.1:{self.port}/v1/models"
+        max_retries = 60 # Increased to 10 mins
         for i in range(max_retries):
             try:
-                response = requests.get(url)
+                response = requests.get(url, timeout=5)
                 if response.status_code == 200:
                     print("✅ vLLM server is ready!")
                     return True
-            except:
+            except Exception as e:
                 pass
-            if i % 5 == 0:
+            if i % 2 == 0:
                 print(f"Waiting for vLLM server... ({i}/{max_retries})")
             time.sleep(10)
         
-        print("❌ vLLM server failed to start.")
+        print("❌ vLLM server failed to start. Check vllm_logs/ for details.")
         self.stop()
         return False
 
