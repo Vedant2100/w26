@@ -20,7 +20,6 @@ image = (
         "matplotlib",
         "seaborn",
         "tqdm",
-        "vllm",
         "openai",
         "requests",
         "sentencepiece",
@@ -78,6 +77,24 @@ def run_experiment_on_modal():
     try:
         subprocess.run(["jupyter", "nbconvert", "--to", "script", notebook_name, "--output", "nb_run"], check=True, cwd="/root")
         
+        # EXTENSION FIX: nbconvert sometimes outputs .txt instead of .py if metadata is messy
+        if not os.path.exists(f"/root/{script_name}"):
+            if os.path.exists("/root/nb_run.txt"):
+                print("⚠️  nbconvert produced .txt; renaming to .py")
+                os.rename("/root/nb_run.txt", f"/root/{script_name}")
+            else:
+                # Search for any file named nb_run.*
+                files = os.listdir("/root")
+                found = False
+                for f in files:
+                    if f.startswith("nb_run."):
+                        print(f"⚠️  Found alternative extension: {f}; renaming to .py")
+                        os.rename(f"/root/{f}", f"/root/{script_name}")
+                        found = True
+                        break
+                if not found:
+                    raise FileNotFoundError("Could not find nbconvert output script!")
+
         # Patch the script to save gifs into the persistent volume folder
         with open(f"/root/{script_name}", "r") as f:
             content = f.read()
